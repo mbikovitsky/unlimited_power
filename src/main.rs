@@ -2,15 +2,11 @@
 
 mod config;
 mod event;
-mod hid_device;
-mod hid_ups;
-mod hid_util;
 mod logger;
 mod self_impersonator;
 mod services;
 mod sessions;
 mod token;
-mod util;
 
 use std::{
     env,
@@ -49,13 +45,13 @@ use bindings::windows::win32::{
 
 use config::{HardCodedConfig, RuntimeConfig};
 use event::Event;
-use hid_device::HidDevice;
-use hid_ups::{HidUps, UpsStatus, UpsStatusFlags, UpsWorkMode};
 use logger::LOGGER;
 use self_impersonator::SelfImpersonator;
 use services::{ScManager, ScManagerAccessRights, ServiceAccessRights};
 use sessions::WTSServer;
 use token::Token;
+use ups::hid_device::HidDevice;
+use ups::hid_ups::{HidUps, UpsStatus, UpsStatusFlags, UpsWorkMode};
 
 static SERVICE_HANDLE: AtomicIsize = AtomicIsize::new(0);
 static SHUTDOWN: Notify = Notify::const_new();

@@ -302,16 +302,27 @@ name = "unlimited_power"
 version = "0.1.0"
 dependencies = [
  "bindings",
- "bitflags",
  "humantime",
  "lazy_static",
  "log",
  "static_assertions",
  "tokio",
+ "ups",
  "utf16_lit",
  "widestring",
  "windows",
  "winreg",
+]
+
+[[package]]
+name = "ups"
+version = "0.1.0"
+dependencies = [
+ "bindings",
+ "bitflags",
+ "tokio",
+ "widestring",
+ "windows",
 ]
 
 [[package]]
