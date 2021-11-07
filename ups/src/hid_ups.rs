@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use bitflags::bitflags;
 use tokio::{sync::Mutex, time::timeout};
-use windows::{Error, ErrorCode, Result};
-
-use bindings::windows::win32::system_services::{E_UNEXPECTED, OLE_E_CANTCONVERT, RPC_E_TIMEOUT};
+use windows::{
+    runtime::{Error, Result},
+    Win32::Foundation::{E_UNEXPECTED, OLE_E_CANTCONVERT, RPC_E_TIMEOUT},
+};
 
 use crate::hid_device::HidDevice;
 
@@ -50,18 +51,10 @@ impl HidUps {
         match response.chars().nth(0) {
             Some(first_char) => {
                 if first_char != HEADER {
-                    return Err(Error::new(
-                        ErrorCode(E_UNEXPECTED as u32),
-                        "Unexpected QS response header",
-                    ));
+                    return Err(Error::new(E_UNEXPECTED, "Unexpected QS response header"));
                 }
             }
-            None => {
-                return Err(Error::new(
-                    ErrorCode(E_UNEXPECTED as u32),
-                    "QS response too short",
-                ))
-            }
+            None => return Err(Error::new(E_UNEXPECTED, "QS response too short")),
         }
         assert!(HEADER.is_ascii());
         let response = &response[1..];
@@ -69,7 +62,7 @@ impl HidUps {
         let parts: Vec<_> = response.split_whitespace().collect();
         if parts.len() != 8 {
             return Err(Error::new(
-                ErrorCode(E_UNEXPECTED as u32),
+                E_UNEXPECTED,
                 "Unexpected number of QS response parts",
             ));
         }
@@ -106,12 +99,7 @@ impl HidUps {
         let future = timeout(Duration::from_millis(SEND_TIMEOUT_MS), future);
         match future.await {
             Ok(result) => result?,
-            Err(_) => {
-                return Err(Error::new(
-                    ErrorCode(RPC_E_TIMEOUT as u32),
-                    "Sending command timed-out",
-                ))
-            }
+            Err(_) => return Err(Error::new(RPC_E_TIMEOUT, "Sending command timed-out")),
         };
 
         Ok(())
@@ -122,19 +110,14 @@ impl HidUps {
         let future = timeout(Duration::from_millis(RECEIVE_TOTAL_TIMEOUT_MS), future);
         let response = match future.await {
             Ok(result) => result?,
-            Err(_) => {
-                return Err(Error::new(
-                    ErrorCode(RPC_E_TIMEOUT as u32),
-                    "Receiving response timed-out",
-                ))
-            }
+            Err(_) => return Err(Error::new(RPC_E_TIMEOUT, "Receiving response timed-out")),
         };
 
         let response = match String::from_utf8(response) {
             Ok(response) => response,
             Err(_) => {
                 return Err(Error::new(
-                    ErrorCode(OLE_E_CANTCONVERT as u32),
+                    OLE_E_CANTCONVERT,
                     "UPS response is not valid UTF-8",
                 ))
             }
@@ -170,19 +153,11 @@ impl HidUps {
         let future = timeout(Duration::from_millis(RECEIVE_TIMEOUT_MS), future);
         let (report_id, report) = match future.await {
             Ok(result) => result?,
-            Err(_) => {
-                return Err(Error::new(
-                    ErrorCode(RPC_E_TIMEOUT as u32),
-                    "Receiving response timed-out",
-                ))
-            }
+            Err(_) => return Err(Error::new(RPC_E_TIMEOUT, "Receiving response timed-out")),
         };
 
         if report_id != REPORT_ID {
-            return Err(Error::new(
-                ErrorCode(E_UNEXPECTED as u32),
-                "Unexpected HID report ID",
-            ));
+            return Err(Error::new(E_UNEXPECTED, "Unexpected HID report ID"));
         }
 
         Ok(report)

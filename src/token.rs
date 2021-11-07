@@ -1,10 +1,13 @@
-use widestring::U16CString;
-use windows::ErrorCode;
-
-use bindings::windows::win32::{
-    security::{LookupPrivilegeValueW, OpenThreadToken, LUID_AND_ATTRIBUTES},
-    system_services::{GetCurrentThread, BOOL, ERROR_NOT_ALL_ASSIGNED, HANDLE, PWSTR},
-    windows_programming::CloseHandle,
+use windows::{
+    runtime::{Error, Result, HRESULT},
+    Win32::{
+        Foundation::{CloseHandle, GetLastError, ERROR_NOT_ALL_ASSIGNED, HANDLE},
+        Security::{
+            AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES,
+            SE_PRIVILEGE_ENABLED, TOKEN_ACCESS_MASK, TOKEN_PRIVILEGES,
+        },
+        System::Threading::{GetCurrentThread, OpenThreadToken},
+    },
 };
 
 #[derive(Debug)]
@@ -13,7 +16,10 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn open_thread_token(desired_access: u32, open_as_self: bool) -> windows::Result<Self> {
+    pub fn open_thread_token(
+        desired_access: TOKEN_ACCESS_MASK,
+        open_as_self: bool,
+    ) -> Result<Self> {
         let mut thread_token = HANDLE::default();
         unsafe {
             OpenThreadToken(
@@ -29,35 +35,23 @@ impl Token {
         })
     }
 
-    pub fn enable_privilege(&self, name: &str) -> windows::Result<()> {
-        const SE_PRIVILEGE_ENABLED: u32 = 0x00000002;
-
+    pub fn enable_privilege(&self, name: &str) -> Result<()> {
         let mut privileges = TOKEN_PRIVILEGES {
-            privilege_count: 1,
-            privileges: [LUID_AND_ATTRIBUTES {
-                attributes: SE_PRIVILEGE_ENABLED,
+            PrivilegeCount: 1,
+            Privileges: [LUID_AND_ATTRIBUTES {
+                Attributes: SE_PRIVILEGE_ENABLED,
                 ..Default::default()
             }],
         };
 
         unsafe {
-            LookupPrivilegeValueW(
-                PWSTR::default(),
-                PWSTR(
-                    U16CString::from_str(name)
-                        .unwrap()
-                        .into_vec_with_nul()
-                        .as_mut_ptr(),
-                ),
-                &mut privileges.privileges[0].luid,
-            )
-            .ok()?;
+            LookupPrivilegeValueW(None, name, &mut privileges.Privileges[0].Luid).ok()?;
         }
 
         unsafe {
             AdjustTokenPrivileges(
                 self.handle,
-                false.into(),
+                false,
                 &mut privileges,
                 0,
                 std::ptr::null_mut(),
@@ -65,9 +59,9 @@ impl Token {
             )
             .ok()?;
         }
-        if ErrorCode::from_win32(ERROR_NOT_ALL_ASSIGNED) == ErrorCode::from_thread() {
-            return Err(windows::Error::new(
-                ErrorCode::from_win32(ERROR_NOT_ALL_ASSIGNED),
+        if unsafe { GetLastError() } == ERROR_NOT_ALL_ASSIGNED {
+            return Err(Error::new(
+                HRESULT::from(ERROR_NOT_ALL_ASSIGNED),
                 "AdjustTokenPrivileges",
             ));
         }
@@ -86,22 +80,3 @@ impl Drop for Token {
 
 unsafe impl Send for Token {}
 impl !Sync for Token {}
-
-extern "system" {
-    #[link(name = "advapi32")]
-    fn AdjustTokenPrivileges(
-        token_handle: HANDLE,
-        disable_all_privileges: BOOL,
-        new_state: *mut TOKEN_PRIVILEGES,
-        buffer_length: u32,
-        previous_state: *mut TOKEN_PRIVILEGES,
-        return_length: *mut u32,
-    ) -> BOOL;
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-struct TOKEN_PRIVILEGES {
-    privilege_count: u32,
-    privileges: [LUID_AND_ATTRIBUTES; 1],
-}

@@ -1,12 +1,13 @@
-use bindings::windows::win32::security::{
-    ImpersonateSelf, RevertToSelf, SECURITY_IMPERSONATION_LEVEL,
+use windows::{
+    runtime::Result,
+    Win32::Security::{ImpersonateSelf, RevertToSelf, SECURITY_IMPERSONATION_LEVEL},
 };
 
 #[must_use]
 pub struct SelfImpersonator;
 
 impl SelfImpersonator {
-    pub fn impersonate(impersonation_level: SECURITY_IMPERSONATION_LEVEL) -> windows::Result<Self> {
+    pub fn impersonate(impersonation_level: SECURITY_IMPERSONATION_LEVEL) -> Result<Self> {
         unsafe {
             ImpersonateSelf(impersonation_level).ok()?;
         }

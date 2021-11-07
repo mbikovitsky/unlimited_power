@@ -1,8 +1,11 @@
-use bindings::windows::storage::streams::{DataWriter, IBuffer};
+use windows::{
+    runtime::Result,
+    Storage::Streams::{DataWriter, IBuffer},
+};
 
-pub(crate) fn slice_to_buffer(bytes: &[u8]) -> windows::Result<IBuffer> {
+pub(crate) fn slice_to_buffer(bytes: &[u8]) -> Result<IBuffer> {
     let writer = DataWriter::new()?;
-    writer.write_bytes(bytes)?;
-    let buffer = writer.detach_buffer()?;
+    writer.WriteBytes(bytes)?;
+    let buffer = writer.DetachBuffer()?;
     Ok(buffer)
 }

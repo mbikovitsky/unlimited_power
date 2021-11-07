@@ -1,9 +1,19 @@
 use std::path::Path;
 
 use widestring::U16CString;
-use windows::{Error, ErrorCode};
-
-use bindings::windows::win32::{security::{ChangeServiceConfig2W, CloseServiceHandle, DeleteService, EnumServicesStatus_dwServiceType, OpenSCManagerW, OpenServiceW, SC_HANDLE, SERVICE_CONFIG, SERVICE_REQUIRED_PRIVILEGES_INFOW}, system_services::{CreateServiceW, CreateServiceW_dwStartType, PWSTR, SERVICE_ERROR}};
+use windows::{
+    runtime::{Error, Result},
+    Win32::{
+        Foundation::PWSTR,
+        Security::SC_HANDLE,
+        System::Services::{
+            ChangeServiceConfig2W, CloseServiceHandle, CreateServiceW, DeleteService,
+            OpenSCManagerW, OpenServiceW, ENUM_SERVICE_TYPE,
+            SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO, SERVICE_ERROR,
+            SERVICE_REQUIRED_PRIVILEGES_INFOW, SERVICE_START_TYPE,
+        },
+    },
+};
 
 #[derive(Debug)]
 pub struct ScManager {
@@ -11,11 +21,10 @@ pub struct ScManager {
 }
 
 impl ScManager {
-    pub fn open_local(desired_access: ScManagerAccessRights) -> windows::Result<Self> {
-        let handle =
-            unsafe { OpenSCManagerW(PWSTR::default(), PWSTR::default(), desired_access.0) };
+    pub fn open_local(desired_access: ScManagerAccessRights) -> Result<Self> {
+        let handle = unsafe { OpenSCManagerW(None, None, desired_access.0) };
         if handle.0 == 0 {
-            return Err(Error::from(ErrorCode::from_thread()));
+            return Err(Error::from_win32());
         }
         Ok(Self { handle })
     }
@@ -24,34 +33,30 @@ impl ScManager {
         &self,
         service_name: impl AsRef<str>,
         display_name: impl AsRef<str>,
-        service_type: EnumServicesStatus_dwServiceType,
-        start_type: CreateServiceW_dwStartType,
+        service_type: ENUM_SERVICE_TYPE,
+        start_type: SERVICE_START_TYPE,
         error_control: SERVICE_ERROR,
         binary_path: impl AsRef<Path>,
-    ) -> windows::Result<Service> {
+    ) -> Result<Service> {
         let handle = unsafe {
             CreateServiceW(
                 self.handle,
-                PWSTR(U16CString::from_str(service_name).unwrap().as_ptr() as _),
-                PWSTR(U16CString::from_str(display_name).unwrap().as_ptr() as _),
+                service_name.as_ref(),
+                display_name.as_ref(),
                 ServiceAccessRights::SERVICE_ALL_ACCESS.0,
                 service_type,
                 start_type,
                 error_control,
-                PWSTR(
-                    U16CString::from_str(binary_path.as_ref().to_str().unwrap())
-                        .unwrap()
-                        .as_ptr() as _,
-                ),
-                PWSTR::default(),
+                binary_path.as_ref().to_str().unwrap(),
+                None,
                 std::ptr::null_mut(),
-                PWSTR::default(),
-                PWSTR::default(),
-                PWSTR::default(),
+                None,
+                None,
+                None,
             )
         };
         if handle.0 == 0 {
-            return Err(Error::from(ErrorCode::from_thread()));
+            return Err(Error::from_win32());
         }
         Ok(Service { handle })
     }
@@ -60,16 +65,10 @@ impl ScManager {
         &self,
         service_name: impl AsRef<str>,
         desired_access: ServiceAccessRights,
-    ) -> windows::Result<Service> {
-        let handle = unsafe {
-            OpenServiceW(
-                self.handle,
-                PWSTR(U16CString::from_str(service_name).unwrap().as_ptr() as _),
-                desired_access.0,
-            )
-        };
+    ) -> Result<Service> {
+        let handle = unsafe { OpenServiceW(self.handle, service_name.as_ref(), desired_access.0) };
         if handle.0 == 0 {
-            return Err(Error::from(ErrorCode::from_thread()));
+            return Err(Error::from_win32());
         }
         Ok(Service { handle })
     }
@@ -92,11 +91,11 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn delete(&self) -> windows::Result<()> {
+    pub fn delete(&self) -> Result<()> {
         unsafe { DeleteService(self.handle).ok() }
     }
 
-    pub fn set_required_privileges<I, T>(&self, privileges: I) -> windows::Result<()>
+    pub fn set_required_privileges<I, T>(&self, privileges: I) -> Result<()>
     where
         I: IntoIterator<Item = T>,
         T: AsRef<str>,
@@ -110,14 +109,14 @@ impl Service {
             .collect();
 
         let mut info = SERVICE_REQUIRED_PRIVILEGES_INFOW {
-            pmsz_required_privileges: PWSTR(multi_string.as_mut_ptr()),
+            pmszRequiredPrivileges: PWSTR(multi_string.as_mut_ptr()),
         };
         let info_ptr: *mut _ = &mut info;
 
         unsafe {
             ChangeServiceConfig2W(
                 self.handle,
-                SERVICE_CONFIG::SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO,
+                SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO,
                 info_ptr as _,
             )
             .ok()?;

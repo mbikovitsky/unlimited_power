@@ -1,20 +1,16 @@
-use std::{
-    convert::TryInto,
-    mem::{size_of, size_of_val},
-    slice,
-};
+use std::{convert::TryInto, mem::size_of, slice};
 
-use widestring::U16CString;
-
-use bindings::windows::win32::{
-    remote_desktop_services::{
-        WTSCloseServer, WTSEnumerateSessionsExW, WTSFreeMemoryExW, WTSSendMessageW,
-        WTS_SESSION_INFO_1W, WTS_TYPE_CLASS,
+use windows::{
+    runtime::Result,
+    Win32::{
+        Foundation::HANDLE,
+        System::RemoteDesktop::{
+            WTSCloseServer, WTSEnumerateSessionsExW, WTSFreeMemoryExW, WTSSendMessageW,
+            WTSTypeSessionInfoLevel1, WTS_CONNECTSTATE_CLASS, WTS_SESSION_INFO_1W,
+        },
+        UI::WindowsAndMessaging::{IDASYNC, MESSAGEBOX_RESULT, MESSAGEBOX_STYLE},
     },
-    system_services::{HANDLE, PWSTR},
 };
-
-pub use bindings::windows::win32::remote_desktop_services::WTS_CONNECTSTATE_CLASS;
 
 #[derive(Debug)]
 pub struct WTSServer {
@@ -30,7 +26,7 @@ impl WTSServer {
         }
     }
 
-    pub fn sessions(&self) -> windows::Result<WTSSessionInfoList> {
+    pub fn sessions(&self) -> Result<WTSSessionInfoList> {
         let mut sessions = std::ptr::null_mut();
         let mut count = 0;
         unsafe {
@@ -45,22 +41,19 @@ impl WTSServer {
         session_id: u32,
         title: impl AsRef<str>,
         message: impl AsRef<str>,
-        style: u32,
-    ) -> windows::Result<()> {
-        let mut title = U16CString::from_str(title).unwrap().into_vec_with_nul();
-        let mut message = U16CString::from_str(message).unwrap().into_vec_with_nul();
+        style: MESSAGEBOX_STYLE,
+    ) -> Result<()> {
+        let title_length = title.as_ref().encode_utf16().count() * size_of::<u16>();
+        let message_length = message.as_ref().encode_utf16().count() * size_of::<u16>();
 
-        let title_length = size_of_val(title.as_slice()) - size_of::<u16>();
-        let message_length = size_of_val(message.as_slice()) - size_of::<u16>();
-
-        let mut response = 0;
+        let mut response = MESSAGEBOX_RESULT::default();
         unsafe {
             WTSSendMessageW(
                 self.handle,
                 session_id,
-                PWSTR(title.as_mut_ptr()),
+                title.as_ref(),
                 title_length.try_into().unwrap(),
-                PWSTR(message.as_mut_ptr()),
+                message.as_ref(),
                 message_length.try_into().unwrap(),
                 style,
                 0,
@@ -70,7 +63,6 @@ impl WTSServer {
             .ok()?;
         }
 
-        const IDASYNC: u32 = 0x7D01;
         debug_assert_eq!(response, IDASYNC);
 
         Ok(())
@@ -110,12 +102,8 @@ impl WTSSessionInfoList {
 impl Drop for WTSSessionInfoList {
     fn drop(&mut self) {
         unsafe {
-            WTSFreeMemoryExW(
-                WTS_TYPE_CLASS::WTSTypeSessionInfoLevel1,
-                self.sessions as _,
-                self.count,
-            )
-            .expect("WTSFreeMemoryExW failed");
+            WTSFreeMemoryExW(WTSTypeSessionInfoLevel1, self.sessions as _, self.count)
+                .expect("WTSFreeMemoryExW failed");
         }
     }
 }
@@ -150,15 +138,15 @@ pub struct WTSSessionInfo<'a> {
 
 impl<'a> WTSSessionInfo<'a> {
     pub fn session_id(&self) -> u32 {
-        self.info.session_id
+        self.info.SessionId
     }
 
     pub fn is_local_session(&self) -> bool {
         // https://docs.microsoft.com/en-us/windows/win32/api/wtsapi32/ns-wtsapi32-wts_session_info_1a
-        self.info.p_host_name.0.is_null()
+        self.info.pHostName.0.is_null()
     }
 
     pub fn connection_state(&self) -> WTS_CONNECTSTATE_CLASS {
-        self.info.state
+        self.info.State
     }
 }

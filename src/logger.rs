@@ -1,6 +1,4 @@
-use widestring::U16CString;
-
-use bindings::windows::win32::{debug::OutputDebugStringW, system_services::PWSTR};
+use windows::Win32::System::Diagnostics::Debug::OutputDebugStringW;
 
 pub(crate) static LOGGER: Logger = Logger;
 
@@ -12,17 +10,16 @@ impl log::Log for Logger {
     }
 
     fn log(&self, record: &log::Record) {
-        if let Ok(wide_string) = U16CString::from_str(format!(
+        let string = format!(
             "[{}] - [{}] - [{}] - [{}] - {}\n",
             record.target(),
             record.file().unwrap_or("<unknown>"),
             record.line().unwrap_or(0),
             record.level(),
             record.args()
-        )) {
-            unsafe {
-                OutputDebugStringW(PWSTR(wide_string.as_ptr() as _));
-            }
+        );
+        unsafe {
+            OutputDebugStringW(string);
         }
     }
 
