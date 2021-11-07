@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 bindings = { path = "bindings" }
 windows = "0.5.0"
-bitflags = "1.2.1"
+ups = { path = "ups" }
 tokio = { version = "1", features = ["full"] }
 widestring = "0.4.3"
 utf16_lit = "2.0.2"

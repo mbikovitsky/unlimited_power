@@ -18,7 +18,7 @@ const RECEIVE_TIMEOUT_MS: u64 = 250;
 const RECEIVE_TOTAL_TIMEOUT_MS: u64 = 2400;
 
 #[derive(Debug)]
-pub(crate) struct HidUps {
+pub struct HidUps {
     device: Mutex<HidDevice>,
 }
 
@@ -190,7 +190,7 @@ impl HidUps {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UpsProtocol {
+pub enum UpsProtocol {
     P,
     T,
     V,
@@ -198,7 +198,7 @@ pub(crate) enum UpsProtocol {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct UpsStatus {
+pub struct UpsStatus {
     input_voltage: f32,
     input_fault_voltage: f32,
     output_voltage: f32,
@@ -229,7 +229,7 @@ impl UpsStatus {
 
 bitflags! {
     #[derive(Default)]
-    pub(crate) struct UpsStatusFlags: u8 {
+    pub struct UpsStatusFlags: u8 {
         const BEEPER_ACTIVE         = 0b00000001;
         const UPS_SHUTDOWN_ACTIVE   = 0b00000010;
         const SELF_TEST_IN_PROGRESS = 0b00000100;
@@ -242,7 +242,7 @@ bitflags! {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum UpsWorkMode {
+pub enum UpsWorkMode {
     Line,
     Battery,
     BatteryTest,
