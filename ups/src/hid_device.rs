@@ -174,4 +174,30 @@ impl HidDevice {
 
         Ok(result)
     }
+
+    pub async fn get_indexed_string(&self, index: u32) -> Result<String> {
+        // https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/hidclass/ni-hidclass-ioctl_hid_get_indexed_string
+
+        const IOCTL_HID_GET_INDEXED_STRING: u32 = 0x000B01E2;
+
+        let input = index.to_le_bytes();
+        let mut output = [0u8; 4093];
+        let returned = self
+            .io_control(
+                IOCTL_HID_GET_INDEXED_STRING,
+                Some(&input),
+                Some(&mut output),
+            )
+            .await?;
+
+        let output: Vec<_> = output[..returned.try_into().unwrap()]
+            .chunks_exact(std::mem::size_of::<u16>())
+            .map(|chunk| u16::from_le_bytes(chunk.try_into().unwrap()))
+            .collect();
+
+        // Output must contain at least a null-terminator
+        assert_eq!(output.last().unwrap(), &0);
+
+        Ok(String::from_utf16_lossy(&output[..output.len() - 1]))
+    }
 }
