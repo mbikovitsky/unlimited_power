@@ -1,18 +1,18 @@
 use std::convert::TryInto;
 
+use anyhow::{anyhow, Result};
 use windows::{
-    runtime::{Error, Result},
+    runtime::Interface,
     Devices::{
         Custom::{CustomDevice, DeviceAccessMode, DeviceSharingMode},
         Enumeration::{DeviceInformation, DeviceInformationCollection},
-        HumanInterfaceDevice,
     },
-    Storage::Streams::DataReader,
-    Win32::Foundation::E_INVALIDARG,
+    Storage::Streams::{Buffer, DataReader},
+    Win32::System::WinRT::IMemoryBufferByteAccess,
 };
 
-use crate::hid_util::HidInfo;
-use crate::util::slice_to_buffer;
+use crate::util::slice_to_ibuffer;
+use crate::{hid_util::HidInfo, util::ioctl_number_to_class};
 
 #[derive(Debug)]
 pub struct HidDevice {
@@ -23,8 +23,8 @@ pub struct HidDevice {
 
 impl HidDevice {
     pub async fn new(
-        usage_page: u16,
-        usage_id: u16,
+        usage_page: Option<u16>,
+        usage_id: Option<u16>,
         vendor_id: u16,
         product_id: u16,
     ) -> Result<Self> {
@@ -47,19 +47,35 @@ impl HidDevice {
     }
 
     async fn get_devices(
-        usage_page: u16,
-        usage_id: u16,
+        usage_page: Option<u16>,
+        usage_id: Option<u16>,
         vendor_id: u16,
         product_id: u16,
     ) -> Result<DeviceInformationCollection> {
-        let future = {
-            let selector = HumanInterfaceDevice::HidDevice::GetDeviceSelectorVidPid(
-                usage_page, usage_id, vendor_id, product_id,
-            )?;
+        let selector = format!(
+            concat!(
+                "System.Devices.InterfaceClassGuid:=\"{{4D1E55B2-F16F-11CF-88CB-001111000030}}\"",
+                " AND System.Devices.InterfaceEnabled:=System.StructuredQueryType.Boolean#True",
+                "{}",
+                "{}",
+                " AND System.DeviceInterface.Hid.VendorId:={}",
+                " AND System.DeviceInterface.Hid.ProductId:={}"
+            ),
+            if let Some(usage_page) = usage_page {
+                format!(" AND System.DeviceInterface.Hid.UsagePage:={}", usage_page)
+            } else {
+                "".to_string()
+            },
+            if let Some(usage_id) = usage_id {
+                format!(" AND System.DeviceInterface.Hid.UsageId:={}", usage_id)
+            } else {
+                "".to_string()
+            },
+            vendor_id,
+            product_id
+        );
 
-            DeviceInformation::FindAllAsyncAqsFilter(selector)?
-        };
-        future.await
+        Ok(DeviceInformation::FindAllAsyncAqsFilter(selector)?.await?)
     }
 
     async fn open_device(device_id: &str) -> Result<CustomDevice> {
@@ -68,14 +84,14 @@ impl HidDevice {
             DeviceAccessMode::ReadWrite,
             DeviceSharingMode::Exclusive,
         )?;
-        future.await
+        Ok(future.await?)
     }
 
     pub async fn send_output_report(&self, report_id: u8, data: &[u8]) -> Result<()> {
         let report = self.create_output_report(report_id, data)?;
 
         let future = {
-            let report_buffer = slice_to_buffer(&report)?;
+            let report_buffer = slice_to_ibuffer(&report)?;
             self.device.OutputStream()?.WriteAsync(report_buffer)?
         };
         let written = future.await?;
@@ -87,10 +103,7 @@ impl HidDevice {
     fn create_output_report(&self, report_id: u8, data: &[u8]) -> Result<Vec<u8>> {
         assert!(self.output_report_size >= 1);
         if data.len() > self.output_report_size - 1 {
-            return Err(Error::new(
-                E_INVALIDARG,
-                "Supplied data does not fit in report",
-            ));
+            return Err(anyhow!("Supplied data does not fit in report"));
         }
 
         let mut report = vec![0u8; self.output_report_size];
@@ -114,5 +127,76 @@ impl HidDevice {
         reader.ReadBytes(&mut report)?;
 
         Ok((report_id, report))
+    }
+
+    pub async fn io_control(
+        &self,
+        control_code: u32,
+        input_buffer: Option<&[u8]>,
+        output_buffer: Option<&mut [u8]>,
+    ) -> Result<u32> {
+        let output_ibuffer = if let Some(output_buffer) = &output_buffer {
+            Some(Buffer::Create(output_buffer.len().try_into().unwrap())?)
+        } else {
+            None
+        };
+
+        let result = {
+            let future = self.device.SendIOControlAsync(
+                ioctl_number_to_class(control_code)?,
+                input_buffer
+                    .map(|input| slice_to_ibuffer(input))
+                    .transpose()?,
+                output_ibuffer
+                    .as_ref()
+                    .map(|buffer| buffer.cast())
+                    .transpose()?,
+            )?;
+            future.await?
+        };
+
+        if let Some(output_buffer) = output_buffer {
+            let byte_access = Buffer::CreateMemoryBufferOverIBuffer(output_ibuffer.unwrap())?
+                .CreateReference()?
+                .cast::<IMemoryBufferByteAccess>()?;
+
+            unsafe {
+                let mut data = std::ptr::null_mut();
+                let mut len = 0;
+                byte_access.GetBuffer(&mut data, &mut len)?;
+
+                let bytes = std::slice::from_raw_parts(data, len.try_into().unwrap());
+
+                output_buffer.copy_from_slice(bytes);
+            };
+        }
+
+        Ok(result)
+    }
+
+    pub async fn get_indexed_string(&self, index: u32) -> Result<String> {
+        // https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/hidclass/ni-hidclass-ioctl_hid_get_indexed_string
+
+        const IOCTL_HID_GET_INDEXED_STRING: u32 = 0x000B01E2;
+
+        let input = index.to_le_bytes();
+        let mut output = [0u8; 4093];
+        let returned = self
+            .io_control(
+                IOCTL_HID_GET_INDEXED_STRING,
+                Some(&input),
+                Some(&mut output),
+            )
+            .await?;
+
+        let output: Vec<_> = output[..returned.try_into().unwrap()]
+            .chunks_exact(std::mem::size_of::<u16>())
+            .map(|chunk| u16::from_le_bytes(chunk.try_into().unwrap()))
+            .collect();
+
+        // Output must contain at least a null-terminator
+        assert_eq!(output.last().unwrap(), &0);
+
+        Ok(String::from_utf16_lossy(&output[..output.len() - 1]))
     }
 }

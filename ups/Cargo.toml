@@ -8,17 +8,20 @@ edition = "2021"
 [dependencies]
 bitflags = "1.2.1"
 tokio = { version = "1", features = ["full"] }
+async-trait = "0.1.51"
+anyhow = "1.0"
 
 [dependencies.windows]
 version = "0.25.0"
 features = [
+    "Foundation",
     "Foundation_Collections",
     "Devices_Custom",
     "Devices_Enumeration",
-    "Devices_HumanInterfaceDevice",
     "Storage_Streams",
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_Devices_HumanInterfaceDevice",
+    "Win32_System_WinRT",
 ]

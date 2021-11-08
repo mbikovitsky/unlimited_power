@@ -16,6 +16,8 @@ winreg = { version = "0.8", features = ["transactions"] }
 lazy_static = "1.4.0"
 humantime = "2.1.0"
 static_assertions = "1.1.0"
+clap = "2.33.3"
+anyhow = "1.0"
 
 [dependencies.windows]
 version = "0.25.0"

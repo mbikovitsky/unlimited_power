@@ -56,8 +56,11 @@ use self_impersonator::SelfImpersonator;
 use services::{ScManager, ScManagerAccessRights, ServiceAccessRights};
 use sessions::WTSServer;
 use token::Token;
-use ups::hid_device::HidDevice;
-use ups::hid_ups::{HidUps, UpsStatus, UpsStatusFlags, UpsWorkMode};
+use ups::{
+    hid_device::HidDevice,
+    ups::{Ups, UpsStatus, UpsStatusFlags, UpsWorkMode},
+    voltronic_hid_ups::VoltronicHidUps,
+};
 
 static SERVICE_HANDLE: AtomicIsize = AtomicIsize::new(0);
 static SHUTDOWN: Notify = Notify::const_new();
@@ -254,17 +257,17 @@ async fn run_service() {
 async fn ups_query_task(
     config: &RuntimeConfig,
     tx: watch::Sender<Option<UpsStatus>>,
-) -> windows::runtime::Result<()> {
+) -> anyhow::Result<()> {
     loop {
         {
             let device = HidDevice::new(
-                config.hid_usage_page,
-                config.hid_usage_id,
+                Some(config.hid_usage_page),
+                Some(config.hid_usage_id),
                 config.vendor_id,
                 config.product_id,
             )
             .await?;
-            let ups = HidUps::new(device)?;
+            let ups = VoltronicHidUps::new(device)?;
 
             while let Ok(status) = ups.status().await {
                 let _ignore = tx.send(Some(status));
@@ -350,7 +353,7 @@ async fn wait_for_low_battery(
     rx: watch::Receiver<Option<UpsStatus>>,
 ) -> Result<(), Box<dyn Error>> {
     wait_for_ups_status(rx, |status| {
-        status.flags().contains(UpsStatusFlags::BATTERY_LOW)
+        status.flags.contains(UpsStatusFlags::BATTERY_LOW)
     })
     .await
 }
