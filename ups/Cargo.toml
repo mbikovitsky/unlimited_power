@@ -15,7 +15,6 @@ features = [
     "Foundation_Collections",
     "Devices_Custom",
     "Devices_Enumeration",
-    "Devices_HumanInterfaceDevice",
     "Storage_Streams",
     "Win32_Foundation",
     "Win32_Security",

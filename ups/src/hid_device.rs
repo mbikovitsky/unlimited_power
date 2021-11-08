@@ -5,7 +5,6 @@ use windows::{
     Devices::{
         Custom::{CustomDevice, DeviceAccessMode, DeviceSharingMode},
         Enumeration::{DeviceInformation, DeviceInformationCollection},
-        HumanInterfaceDevice,
     },
     Storage::Streams::DataReader,
     Win32::Foundation::E_INVALIDARG,
@@ -23,8 +22,8 @@ pub struct HidDevice {
 
 impl HidDevice {
     pub async fn new(
-        usage_page: u16,
-        usage_id: u16,
+        usage_page: Option<u16>,
+        usage_id: Option<u16>,
         vendor_id: u16,
         product_id: u16,
     ) -> Result<Self> {
@@ -47,19 +46,35 @@ impl HidDevice {
     }
 
     async fn get_devices(
-        usage_page: u16,
-        usage_id: u16,
+        usage_page: Option<u16>,
+        usage_id: Option<u16>,
         vendor_id: u16,
         product_id: u16,
     ) -> Result<DeviceInformationCollection> {
-        let future = {
-            let selector = HumanInterfaceDevice::HidDevice::GetDeviceSelectorVidPid(
-                usage_page, usage_id, vendor_id, product_id,
-            )?;
+        let selector = format!(
+            concat!(
+                "System.Devices.InterfaceClassGuid:=\"{{4D1E55B2-F16F-11CF-88CB-001111000030}}\"",
+                " AND System.Devices.InterfaceEnabled:=System.StructuredQueryType.Boolean#True",
+                "{}",
+                "{}",
+                " AND System.DeviceInterface.Hid.VendorId:={}",
+                " AND System.DeviceInterface.Hid.ProductId:={}"
+            ),
+            if let Some(usage_page) = usage_page {
+                format!(" AND System.DeviceInterface.Hid.UsagePage:={}", usage_page)
+            } else {
+                "".to_string()
+            },
+            if let Some(usage_id) = usage_id {
+                format!(" AND System.DeviceInterface.Hid.UsageId:={}", usage_id)
+            } else {
+                "".to_string()
+            },
+            vendor_id,
+            product_id
+        );
 
-            DeviceInformation::FindAllAsyncAqsFilter(selector)?
-        };
-        future.await
+        DeviceInformation::FindAllAsyncAqsFilter(selector)?.await
     }
 
     async fn open_device(device_id: &str) -> Result<CustomDevice> {

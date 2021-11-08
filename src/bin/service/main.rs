@@ -258,8 +258,8 @@ async fn ups_query_task(
     loop {
         {
             let device = HidDevice::new(
-                config.hid_usage_page,
-                config.hid_usage_id,
+                Some(config.hid_usage_page),
+                Some(config.hid_usage_id),
                 config.vendor_id,
                 config.product_id,
             )
