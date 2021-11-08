@@ -1,8 +1,16 @@
 use std::error::Error;
 
-use clap::{crate_authors, crate_name, crate_version, App, Arg, SubCommand};
+use clap::{arg_enum, crate_authors, crate_name, crate_version, value_t, App, Arg, SubCommand};
 
-use ups::hid_device::HidDevice;
+use ups::{hid_device::HidDevice, voltronic_hid_ups::VoltronicHidUps};
+
+arg_enum! {
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum Model {
+        Voltronic,
+        Megatec,
+    }
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -10,6 +18,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .version(crate_version!())
         .author(crate_authors!())
         .about("Inspects a connected UPS")
+        .arg(
+            Arg::with_name("model")
+                .short("m")
+                .long("model")
+                .required(true)
+                .takes_value(true)
+                .case_insensitive(true)
+                .possible_values(&Model::variants())
+                .help("The UPS model"),
+        )
         .arg(
             Arg::with_name("vid")
                 .short("v")
@@ -43,6 +61,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .subcommand(SubCommand::with_name("status").about("Displays the UPS status"))
         .get_matches();
 
+    let model = value_t!(args, "model", Model)?;
     let vendor_id = args.value_of("vid").unwrap().parse()?;
     let product_id = args.value_of("pid").unwrap().parse()?;
     let usage_page = args.value_of("usage_page").map(str::parse).transpose()?;
@@ -50,9 +69,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let device = HidDevice::new(usage_page, usage_id, vendor_id, product_id).await?;
 
+    let ups = match model {
+        Model::Voltronic => VoltronicHidUps::new(device)?,
+        Model::Megatec => todo!(),
+    };
+
     match args.subcommand() {
         ("status", _) => {
-            let status = device.get_indexed_string(3).await?;
+            let status = ups.status().await?;
             dbg!(status);
         }
         ("", None) => {
