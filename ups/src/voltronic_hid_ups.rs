@@ -1,10 +1,7 @@
 use std::time::Duration;
 
+use anyhow::{anyhow, Result};
 use tokio::{sync::Mutex, time::timeout};
-use windows::{
-    runtime::{Error, Result},
-    Win32::Foundation::{E_UNEXPECTED, OLE_E_CANTCONVERT, RPC_E_TIMEOUT},
-};
 
 use crate::{
     hid_device::HidDevice,
@@ -53,20 +50,17 @@ impl VoltronicHidUps {
         match response.chars().nth(0) {
             Some(first_char) => {
                 if first_char != HEADER {
-                    return Err(Error::new(E_UNEXPECTED, "Unexpected QS response header"));
+                    return Err(anyhow!("Unexpected QS response header"));
                 }
             }
-            None => return Err(Error::new(E_UNEXPECTED, "QS response too short")),
+            None => return Err(anyhow!("QS response too short")),
         }
         assert!(HEADER.is_ascii());
         let response = &response[1..];
 
         let parts: Vec<_> = response.split_whitespace().collect();
         if parts.len() != 8 {
-            return Err(Error::new(
-                E_UNEXPECTED,
-                "Unexpected number of QS response parts",
-            ));
+            return Err(anyhow!("Unexpected number of QS response parts"));
         }
 
         let status = UpsStatus {
@@ -101,7 +95,7 @@ impl VoltronicHidUps {
         let future = timeout(Duration::from_millis(SEND_TIMEOUT_MS), future);
         match future.await {
             Ok(result) => result?,
-            Err(_) => return Err(Error::new(RPC_E_TIMEOUT, "Sending command timed-out")),
+            Err(_) => return Err(anyhow!("Sending command timed-out")),
         };
 
         Ok(())
@@ -112,17 +106,12 @@ impl VoltronicHidUps {
         let future = timeout(Duration::from_millis(RECEIVE_TOTAL_TIMEOUT_MS), future);
         let response = match future.await {
             Ok(result) => result?,
-            Err(_) => return Err(Error::new(RPC_E_TIMEOUT, "Receiving response timed-out")),
+            Err(_) => return Err(anyhow!("Receiving response timed-out")),
         };
 
         let response = match String::from_utf8(response) {
             Ok(response) => response,
-            Err(_) => {
-                return Err(Error::new(
-                    OLE_E_CANTCONVERT,
-                    "UPS response is not valid UTF-8",
-                ))
-            }
+            Err(_) => return Err(anyhow!("UPS response is not valid UTF-8")),
         };
         let response = &response[0..response.find(TERMINATOR).unwrap()];
 
@@ -155,11 +144,11 @@ impl VoltronicHidUps {
         let future = timeout(Duration::from_millis(RECEIVE_TIMEOUT_MS), future);
         let (report_id, report) = match future.await {
             Ok(result) => result?,
-            Err(_) => return Err(Error::new(RPC_E_TIMEOUT, "Receiving response timed-out")),
+            Err(_) => return Err(anyhow!("Receiving response timed-out")),
         };
 
         if report_id != REPORT_ID {
-            return Err(Error::new(E_UNEXPECTED, "Unexpected HID report ID"));
+            return Err(anyhow!("Unexpected HID report ID"));
         }
 
         Ok(report)

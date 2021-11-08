@@ -257,7 +257,7 @@ async fn run_service() {
 async fn ups_query_task(
     config: &RuntimeConfig,
     tx: watch::Sender<Option<UpsStatus>>,
-) -> windows::runtime::Result<()> {
+) -> anyhow::Result<()> {
     loop {
         {
             let device = HidDevice::new(

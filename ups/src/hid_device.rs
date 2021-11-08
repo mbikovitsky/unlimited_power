@@ -1,13 +1,14 @@
 use std::convert::TryInto;
 
+use anyhow::{anyhow, Result};
 use windows::{
-    runtime::{Error, Interface, Result},
+    runtime::Interface,
     Devices::{
         Custom::{CustomDevice, DeviceAccessMode, DeviceSharingMode},
         Enumeration::{DeviceInformation, DeviceInformationCollection},
     },
     Storage::Streams::{Buffer, DataReader},
-    Win32::{Foundation::E_INVALIDARG, System::WinRT::IMemoryBufferByteAccess},
+    Win32::System::WinRT::IMemoryBufferByteAccess,
 };
 
 use crate::util::slice_to_ibuffer;
@@ -74,7 +75,7 @@ impl HidDevice {
             product_id
         );
 
-        DeviceInformation::FindAllAsyncAqsFilter(selector)?.await
+        Ok(DeviceInformation::FindAllAsyncAqsFilter(selector)?.await?)
     }
 
     async fn open_device(device_id: &str) -> Result<CustomDevice> {
@@ -83,7 +84,7 @@ impl HidDevice {
             DeviceAccessMode::ReadWrite,
             DeviceSharingMode::Exclusive,
         )?;
-        future.await
+        Ok(future.await?)
     }
 
     pub async fn send_output_report(&self, report_id: u8, data: &[u8]) -> Result<()> {
@@ -102,10 +103,7 @@ impl HidDevice {
     fn create_output_report(&self, report_id: u8, data: &[u8]) -> Result<Vec<u8>> {
         assert!(self.output_report_size >= 1);
         if data.len() > self.output_report_size - 1 {
-            return Err(Error::new(
-                E_INVALIDARG,
-                "Supplied data does not fit in report",
-            ));
+            return Err(anyhow!("Supplied data does not fit in report"));
         }
 
         let mut report = vec![0u8; self.output_report_size];
