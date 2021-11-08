@@ -18,6 +18,8 @@ humantime = "2.1.0"
 static_assertions = "1.1.0"
 clap = "2.33.3"
 anyhow = "1.0"
+num-traits = "0.2"
+num-derive = "0.3"
 
 [dependencies.windows]
 version = "0.25.0"

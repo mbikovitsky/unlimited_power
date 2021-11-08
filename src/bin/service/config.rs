@@ -1,9 +1,19 @@
 use std::convert::TryInto;
 
+use anyhow::anyhow;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
+pub enum Model {
+    Voltronic = 0,
+    Megatec = 1,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RuntimeConfig {
+    pub model: Model,
     pub hibernate: bool,
     pub poll_interval_ms: u32,
     pub poll_failure_timeout_ms: u32,
@@ -18,6 +28,8 @@ impl RuntimeConfig {
     pub fn read() -> anyhow::Result<Self> {
         let key = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(Self::registry_path())?;
 
+        let model: Model =
+            FromPrimitive::from_u32(key.get_value("model")?).ok_or(anyhow!("Invalid model"))?;
         let hibernate = key.get_value("hibernate").map(|value: u32| value != 0)?;
         let poll_interval_ms: u32 = key.get_value("poll_interval_ms")?;
         let poll_failure_timeout_ms: u32 = key.get_value("poll_failure_timeout_ms")?;
@@ -28,6 +40,7 @@ impl RuntimeConfig {
         let product_id: u32 = key.get_value("product_id")?;
 
         Ok(Self {
+            model,
             hibernate,
             poll_interval_ms,
             poll_failure_timeout_ms,
@@ -42,6 +55,7 @@ impl RuntimeConfig {
     pub fn write(&self) -> anyhow::Result<()> {
         let (key, _) = RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey(Self::registry_path())?;
 
+        key.set_value("model", &ToPrimitive::to_u32(&self.model).unwrap())?;
         key.set_value("hibernate", if self.hibernate { &1u32 } else { &0u32 })?;
         key.set_value("poll_interval_ms", &self.poll_interval_ms)?;
         key.set_value("poll_failure_timeout_ms", &self.poll_failure_timeout_ms)?;
@@ -81,6 +95,7 @@ impl RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
+            model: Model::Voltronic,
             hibernate: true,
             poll_interval_ms: 1000,
             poll_failure_timeout_ms: 10000,
