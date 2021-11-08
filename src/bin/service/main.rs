@@ -57,7 +57,7 @@ use services::{ScManager, ScManagerAccessRights, ServiceAccessRights};
 use sessions::WTSServer;
 use token::Token;
 use ups::hid_device::HidDevice;
-use ups::hid_ups::{HidUps, UpsStatus, UpsStatusFlags, UpsWorkMode};
+use ups::voltronic_hid_ups::{VoltronicHidUps, UpsStatus, UpsStatusFlags, UpsWorkMode};
 
 static SERVICE_HANDLE: AtomicIsize = AtomicIsize::new(0);
 static SHUTDOWN: Notify = Notify::const_new();
@@ -264,7 +264,7 @@ async fn ups_query_task(
                 config.product_id,
             )
             .await?;
-            let ups = HidUps::new(device)?;
+            let ups = VoltronicHidUps::new(device)?;
 
             while let Ok(status) = ups.status().await {
                 let _ignore = tx.send(Some(status));

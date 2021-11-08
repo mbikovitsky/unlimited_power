@@ -19,11 +19,11 @@ const RECEIVE_TIMEOUT_MS: u64 = 250;
 const RECEIVE_TOTAL_TIMEOUT_MS: u64 = 2400;
 
 #[derive(Debug)]
-pub struct HidUps {
+pub struct VoltronicHidUps {
     device: Mutex<HidDevice>,
 }
 
-impl HidUps {
+impl VoltronicHidUps {
     pub fn new(device: HidDevice) -> Result<Self> {
         Ok(Self {
             device: Mutex::new(device),
