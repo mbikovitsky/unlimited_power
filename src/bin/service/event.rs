@@ -11,14 +11,15 @@ use std::{
 
 use log::error;
 use static_assertions::assert_impl_all;
-use windows::{Error, ErrorCode};
-
-use bindings::windows::win32::{
-    system_services::{
-        CreateEventW, RegisterWaitForSingleObject_dwFlags, ResetEvent, SetEvent, UnregisterWaitEx,
-        BOOL, HANDLE, PWSTR,
+use windows::{
+    runtime::{Error, Result},
+    Win32::{
+        Foundation::{CloseHandle, BOOLEAN, HANDLE},
+        System::Threading::{
+            CreateEventW, RegisterWaitForSingleObject, ResetEvent, SetEvent, UnregisterWaitEx,
+            WT_EXECUTEONLYONCE,
+        },
     },
-    windows_programming::CloseHandle,
 };
 
 pub struct Event {
@@ -26,30 +27,23 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn new(manual_reset: bool, signaled: bool) -> windows::Result<Self> {
-        let handle = unsafe {
-            CreateEventW(
-                std::ptr::null_mut(),
-                manual_reset,
-                signaled,
-                PWSTR::default(),
-            )
-        };
+    pub fn new(manual_reset: bool, signaled: bool) -> Result<Self> {
+        let handle = unsafe { CreateEventW(std::ptr::null(), manual_reset, signaled, None) };
         if handle == HANDLE(0) {
-            return Err(Error::from(ErrorCode::from_thread()));
+            return Err(Error::from_win32());
         }
         Ok(Self { handle })
     }
 
-    pub fn set(&self) -> windows::Result<()> {
+    pub fn set(&self) -> Result<()> {
         unsafe { SetEvent(self.handle).ok() }
     }
 
-    pub fn reset(&self) -> windows::Result<()> {
+    pub fn reset(&self) -> Result<()> {
         unsafe { ResetEvent(self.handle).ok() }
     }
 
-    pub fn signaled(&self) -> windows::Result<Signaled> {
+    pub fn signaled(&self) -> Result<Signaled> {
         Signaled::new(self)
     }
 
@@ -92,7 +86,7 @@ impl Drop for SharedState {
 }
 
 impl<'a> Signaled<'a> {
-    fn new(event: &'a Event) -> windows::Result<Self> {
+    fn new(event: &'a Event) -> Result<Self> {
         let shared_state = SharedState {
             signaled: false,
             waker: None,
@@ -113,7 +107,7 @@ impl<'a> Signaled<'a> {
     fn register_wait(
         event: &Event,
         shared_state: Box<Mutex<SharedState>>,
-    ) -> windows::Result<(HANDLE, *const Mutex<SharedState>)> {
+    ) -> Result<(HANDLE, *const Mutex<SharedState>)> {
         const INFINITE: u32 = u32::MAX;
 
         assert_impl_all!(Mutex<SharedState>: Sync);
@@ -127,12 +121,12 @@ impl<'a> Signaled<'a> {
                 Some(Self::wait_callback),
                 shared_state_raw_ptr as _,
                 INFINITE,
-                RegisterWaitForSingleObject_dwFlags::WT_EXECUTEONLYONCE,
+                WT_EXECUTEONLYONCE,
             );
             if !success.as_bool() {
-                let error_code = ErrorCode::from_thread();
+                let error = Error::from_win32();
                 Self::drop_shared_state(shared_state_raw_ptr);
-                return Err(windows::Error::from(error_code));
+                return Err(error);
             }
             Ok((wait_handle, shared_state_raw_ptr))
         }
@@ -142,13 +136,13 @@ impl<'a> Signaled<'a> {
         drop(Box::from_raw(shared_state as *mut Mutex<SharedState>));
     }
 
-    extern "system" fn wait_callback(lp_parameter: *mut c_void, timer_or_wait_fired: u8) {
+    extern "system" fn wait_callback(lp_parameter: *mut c_void, timer_or_wait_fired: BOOLEAN) {
         let result = catch_unwind(|| {
             let shared_state = lp_parameter as *const Mutex<SharedState>;
             let shared_state = unsafe { shared_state.as_ref().unwrap() };
             let mut shared_state = shared_state.lock().unwrap();
 
-            let timed_out = timer_or_wait_fired != 0;
+            let timed_out = timer_or_wait_fired.0 != 0;
             assert!(!timed_out); // Can't time out as we specify INFINITE
 
             shared_state.signaled = true;
@@ -195,20 +189,6 @@ impl<'a> Drop for Signaled<'a> {
             }
         }
     }
-}
-
-type WAITORTIMERCALLBACK = extern "system" fn(lp_parameter: *mut c_void, timer_or_wait_fired: u8);
-
-extern "system" {
-    #[link(name = "kernel32")]
-    fn RegisterWaitForSingleObject(
-        ph_new_wait_object: *mut HANDLE,
-        h_object: HANDLE,
-        callback: Option<WAITORTIMERCALLBACK>,
-        context: *mut c_void,
-        dw_milliseconds: u32,
-        dw_flags: RegisterWaitForSingleObject_dwFlags,
-    ) -> BOOL;
 }
 
 #[cfg(test)]

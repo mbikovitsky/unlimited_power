@@ -1,20 +1,37 @@
 [package]
 name = "unlimited_power"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Michael Bikovitsky <biko@bikodbg.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bindings = { path = "bindings" }
-windows = "0.5.0"
-bitflags = "1.2.1"
+ups = { path = "ups" }
 tokio = { version = "1", features = ["full"] }
 widestring = "0.4.3"
 utf16_lit = "2.0.2"
 log = "0.4"
-winreg = { version = "0.8", features = ["transactions"] }
+winreg = { version = "0.10" }
 lazy_static = "1.4.0"
 humantime = "2.1.0"
 static_assertions = "1.1.0"
+clap = "2.33.3"
+anyhow = "1.0"
+num-traits = "0.2"
+num-derive = "0.3"
+
+[dependencies.windows]
+version = "0.25.0"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Services",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_SystemServices",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_RemoteDesktop",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Shutdown",
+    "Win32_System_Power",
+]
