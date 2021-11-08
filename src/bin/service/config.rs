@@ -1,65 +1,79 @@
-use std::{convert::TryInto, error::Error, io};
+use std::convert::TryInto;
 
-use winreg::{enums::HKEY_LOCAL_MACHINE, transaction::Transaction, RegKey};
+use anyhow::anyhow;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
+use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
+pub enum Model {
+    Voltronic = 0,
+    Megatec = 1,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RuntimeConfig {
+    pub model: Model,
     pub hibernate: bool,
     pub poll_interval_ms: u32,
     pub poll_failure_timeout_ms: u32,
     pub shutdown_timeout_s: u32,
-    pub hid_usage_page: u16,
-    pub hid_usage_id: u16,
+    pub hid_usage_page: Option<u16>,
+    pub hid_usage_id: Option<u16>,
     pub vendor_id: u16,
     pub product_id: u16,
 }
 
 impl RuntimeConfig {
-    pub fn read() -> Result<Self, Box<dyn Error>> {
-        let transaction = Transaction::new()?;
+    pub fn read() -> anyhow::Result<Self> {
+        let key = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(Self::registry_path())?;
 
-        let key = RegKey::predef(HKEY_LOCAL_MACHINE)
-            .open_subkey_transacted(Self::registry_path(), &transaction)?;
-
+        let model: Model =
+            FromPrimitive::from_u32(key.get_value("model")?).ok_or(anyhow!("Invalid model"))?;
         let hibernate = key.get_value("hibernate").map(|value: u32| value != 0)?;
         let poll_interval_ms: u32 = key.get_value("poll_interval_ms")?;
         let poll_failure_timeout_ms: u32 = key.get_value("poll_failure_timeout_ms")?;
         let shutdown_timeout_s: u32 = key.get_value("shutdown_timeout_s")?;
-        let hid_usage_page: u32 = key.get_value("hid_usage_page")?;
-        let hid_usage_id: u32 = key.get_value("hid_usage_id")?;
+        let hid_usage_page: Option<u32> = key.get_value("hid_usage_page").ok();
+        let hid_usage_id: Option<u32> = key.get_value("hid_usage_id").ok();
         let vendor_id: u32 = key.get_value("vendor_id")?;
         let product_id: u32 = key.get_value("product_id")?;
 
-        transaction.commit()?;
-
         Ok(Self {
+            model,
             hibernate,
             poll_interval_ms,
             poll_failure_timeout_ms,
             shutdown_timeout_s,
-            hid_usage_page: hid_usage_page.try_into()?,
-            hid_usage_id: hid_usage_id.try_into()?,
+            hid_usage_page: hid_usage_page.map(u32::try_into).transpose()?,
+            hid_usage_id: hid_usage_id.map(u32::try_into).transpose()?,
             vendor_id: vendor_id.try_into()?,
             product_id: product_id.try_into()?,
         })
     }
 
-    pub fn write(&self) -> io::Result<()> {
-        let transaction = Transaction::new()?;
+    pub fn write(&self) -> anyhow::Result<()> {
+        let (key, _) = RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey(Self::registry_path())?;
 
-        let (key, _) = RegKey::predef(HKEY_LOCAL_MACHINE)
-            .create_subkey_transacted(Self::registry_path(), &transaction)?;
-
+        key.set_value("model", &ToPrimitive::to_u32(&self.model).unwrap())?;
         key.set_value("hibernate", if self.hibernate { &1u32 } else { &0u32 })?;
         key.set_value("poll_interval_ms", &self.poll_interval_ms)?;
         key.set_value("poll_failure_timeout_ms", &self.poll_failure_timeout_ms)?;
         key.set_value("shutdown_timeout_s", &self.shutdown_timeout_s)?;
 
-        let hid_usage_page: u32 = self.hid_usage_page.into();
-        key.set_value("hid_usage_page", &hid_usage_page)?;
+        if let Some(hid_usage_page) = self.hid_usage_page {
+            let hid_usage_page: u32 = hid_usage_page.into();
+            key.set_value("hid_usage_page", &hid_usage_page)?;
+        } else {
+            key.delete_value("hid_usage_page")?;
+        }
 
-        let hid_usage_id: u32 = self.hid_usage_id.into();
-        key.set_value("hid_usage_id", &hid_usage_id)?;
+        if let Some(hid_usage_id) = self.hid_usage_id {
+            let hid_usage_id: u32 = hid_usage_id.into();
+            key.set_value("hid_usage_id", &hid_usage_id)?;
+        } else {
+            key.delete_value("hid_usage_id")?;
+        }
 
         let vendor_id: u32 = self.vendor_id.into();
         key.set_value("vendor_id", &vendor_id)?;
@@ -67,7 +81,7 @@ impl RuntimeConfig {
         let product_id: u32 = self.product_id.into();
         key.set_value("product_id", &product_id)?;
 
-        transaction.commit()
+        Ok(())
     }
 
     fn registry_path() -> String {
@@ -81,12 +95,13 @@ impl RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
+            model: Model::Voltronic,
             hibernate: true,
             poll_interval_ms: 1000,
             poll_failure_timeout_ms: 10000,
             shutdown_timeout_s: 5 * 60,
-            hid_usage_page: 0xFF00,
-            hid_usage_id: 0x0001,
+            hid_usage_page: Some(0xFF00),
+            hid_usage_id: Some(0x0001),
             vendor_id: 0x0665,
             product_id: 0x5161,
         }

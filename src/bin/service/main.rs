@@ -58,6 +58,7 @@ use sessions::WTSServer;
 use token::Token;
 use ups::{
     hid_device::HidDevice,
+    megatec_hid_ups::MegatecHidUps,
     ups::{Ups, UpsStatus, UpsStatusFlags, UpsWorkMode},
     voltronic_hid_ups::VoltronicHidUps,
 };
@@ -261,13 +262,17 @@ async fn ups_query_task(
     loop {
         {
             let device = HidDevice::new(
-                Some(config.hid_usage_page),
-                Some(config.hid_usage_id),
+                config.hid_usage_page,
+                config.hid_usage_id,
                 config.vendor_id,
                 config.product_id,
             )
             .await?;
-            let ups = VoltronicHidUps::new(device)?;
+
+            let ups: Box<dyn Ups> = match config.model {
+                config::Model::Voltronic => Box::new(VoltronicHidUps::new(device)?),
+                config::Model::Megatec => Box::new(MegatecHidUps::new(device)?),
+            };
 
             while let Ok(status) = ups.status().await {
                 let _ignore = tx.send(Some(status));
