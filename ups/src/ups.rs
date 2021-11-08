@@ -1,4 +1,11 @@
+use anyhow::Result;
+use async_trait::async_trait;
 use bitflags::bitflags;
+
+#[async_trait]
+pub trait Ups {
+    async fn status(&self) -> Result<UpsStatus>;
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct UpsStatus {

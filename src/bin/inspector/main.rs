@@ -2,7 +2,7 @@ use std::error::Error;
 
 use clap::{arg_enum, crate_authors, crate_name, crate_version, value_t, App, Arg, SubCommand};
 
-use ups::{hid_device::HidDevice, voltronic_hid_ups::VoltronicHidUps};
+use ups::{hid_device::HidDevice, ups::Ups, voltronic_hid_ups::VoltronicHidUps};
 
 arg_enum! {
     #[derive(Debug, PartialEq, Eq)]

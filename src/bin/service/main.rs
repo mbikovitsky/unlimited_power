@@ -58,7 +58,7 @@ use sessions::WTSServer;
 use token::Token;
 use ups::{
     hid_device::HidDevice,
-    ups::{UpsStatus, UpsStatusFlags, UpsWorkMode},
+    ups::{Ups, UpsStatus, UpsStatusFlags, UpsWorkMode},
     voltronic_hid_ups::VoltronicHidUps,
 };
 

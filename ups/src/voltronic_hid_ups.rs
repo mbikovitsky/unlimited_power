@@ -1,11 +1,12 @@
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
 use tokio::{sync::Mutex, time::timeout};
 
 use crate::{
     hid_device::HidDevice,
-    ups::{UpsStatus, UpsStatusFlags},
+    ups::{Ups, UpsStatus, UpsStatusFlags},
 };
 
 const REPORT_ID: u8 = 0;
@@ -37,44 +38,6 @@ impl VoltronicHidUps {
             "V" => UpsProtocol::V,
             _ => UpsProtocol::Unknown,
         })
-    }
-
-    pub async fn status(&self) -> Result<UpsStatus> {
-        match self.protocol().await? {
-            UpsProtocol::V => {}
-            _ => todo!("Protocol not implemented"),
-        };
-
-        let response = self.transact_command("QS").await?;
-
-        match response.chars().nth(0) {
-            Some(first_char) => {
-                if first_char != HEADER {
-                    return Err(anyhow!("Unexpected QS response header"));
-                }
-            }
-            None => return Err(anyhow!("QS response too short")),
-        }
-        assert!(HEADER.is_ascii());
-        let response = &response[1..];
-
-        let parts: Vec<_> = response.split_whitespace().collect();
-        if parts.len() != 8 {
-            return Err(anyhow!("Unexpected number of QS response parts"));
-        }
-
-        let status = UpsStatus {
-            input_voltage: parts[0].parse().unwrap_or(f32::NAN),
-            input_fault_voltage: parts[1].parse().unwrap_or(f32::NAN),
-            output_voltage: parts[2].parse().unwrap_or(f32::NAN),
-            output_load_level: parts[3].parse().unwrap_or(0),
-            output_frequency: parts[4].parse().unwrap_or(f32::NAN),
-            battery_voltage: parts[5].parse().unwrap_or(f32::NAN),
-            internal_temperature: parts[6].parse().unwrap_or(f32::NAN),
-            flags: UpsStatusFlags::from_bits(u8::from_str_radix(parts[7], 2).unwrap_or(0)).unwrap(),
-        };
-
-        Ok(status)
     }
 
     async fn transact_command(&self, command: &str) -> Result<String> {
@@ -152,6 +115,47 @@ impl VoltronicHidUps {
         }
 
         Ok(report)
+    }
+}
+
+#[async_trait]
+impl Ups for VoltronicHidUps {
+    async fn status(&self) -> Result<UpsStatus> {
+        match self.protocol().await? {
+            UpsProtocol::V => {}
+            _ => todo!("Protocol not implemented"),
+        };
+
+        let response = self.transact_command("QS").await?;
+
+        match response.chars().nth(0) {
+            Some(first_char) => {
+                if first_char != HEADER {
+                    return Err(anyhow!("Unexpected QS response header"));
+                }
+            }
+            None => return Err(anyhow!("QS response too short")),
+        }
+        assert!(HEADER.is_ascii());
+        let response = &response[1..];
+
+        let parts: Vec<_> = response.split_whitespace().collect();
+        if parts.len() != 8 {
+            return Err(anyhow!("Unexpected number of QS response parts"));
+        }
+
+        let status = UpsStatus {
+            input_voltage: parts[0].parse().unwrap_or(f32::NAN),
+            input_fault_voltage: parts[1].parse().unwrap_or(f32::NAN),
+            output_voltage: parts[2].parse().unwrap_or(f32::NAN),
+            output_load_level: parts[3].parse().unwrap_or(0),
+            output_frequency: parts[4].parse().unwrap_or(f32::NAN),
+            battery_voltage: parts[5].parse().unwrap_or(f32::NAN),
+            internal_temperature: parts[6].parse().unwrap_or(f32::NAN),
+            flags: UpsStatusFlags::from_bits(u8::from_str_radix(parts[7], 2).unwrap_or(0)).unwrap(),
+        };
+
+        Ok(status)
     }
 }
 
