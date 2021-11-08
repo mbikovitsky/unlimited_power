@@ -22,10 +22,6 @@ pub struct UpsStatus {
 }
 
 impl UpsStatus {
-    pub fn flags(&self) -> UpsStatusFlags {
-        self.flags
-    }
-
     pub fn work_mode(&self) -> UpsWorkMode {
         if self.flags.contains(UpsStatusFlags::UPS_FAULT) {
             UpsWorkMode::Fault

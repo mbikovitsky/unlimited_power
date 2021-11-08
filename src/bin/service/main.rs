@@ -353,7 +353,7 @@ async fn wait_for_low_battery(
     rx: watch::Receiver<Option<UpsStatus>>,
 ) -> Result<(), Box<dyn Error>> {
     wait_for_ups_status(rx, |status| {
-        status.flags().contains(UpsStatusFlags::BATTERY_LOW)
+        status.flags.contains(UpsStatusFlags::BATTERY_LOW)
     })
     .await
 }
