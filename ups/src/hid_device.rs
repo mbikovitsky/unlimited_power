@@ -1,17 +1,17 @@
 use std::convert::TryInto;
 
 use windows::{
-    runtime::{Error, Result},
+    runtime::{Error, Interface, Result},
     Devices::{
         Custom::{CustomDevice, DeviceAccessMode, DeviceSharingMode},
         Enumeration::{DeviceInformation, DeviceInformationCollection},
     },
-    Storage::Streams::DataReader,
-    Win32::Foundation::E_INVALIDARG,
+    Storage::Streams::{Buffer, DataReader},
+    Win32::{Foundation::E_INVALIDARG, System::WinRT::IMemoryBufferByteAccess},
 };
 
-use crate::hid_util::HidInfo;
-use crate::util::slice_to_buffer;
+use crate::util::slice_to_ibuffer;
+use crate::{hid_util::HidInfo, util::ioctl_number_to_class};
 
 #[derive(Debug)]
 pub struct HidDevice {
@@ -90,7 +90,7 @@ impl HidDevice {
         let report = self.create_output_report(report_id, data)?;
 
         let future = {
-            let report_buffer = slice_to_buffer(&report)?;
+            let report_buffer = slice_to_ibuffer(&report)?;
             self.device.OutputStream()?.WriteAsync(report_buffer)?
         };
         let written = future.await?;
@@ -129,5 +129,49 @@ impl HidDevice {
         reader.ReadBytes(&mut report)?;
 
         Ok((report_id, report))
+    }
+
+    pub async fn io_control(
+        &self,
+        control_code: u32,
+        input_buffer: Option<&[u8]>,
+        output_buffer: Option<&mut [u8]>,
+    ) -> Result<u32> {
+        let control_code = ioctl_number_to_class(control_code)?;
+
+        let input_ibuffer = if let Some(input_buffer) = input_buffer {
+            Some(slice_to_ibuffer(input_buffer)?)
+        } else {
+            None
+        };
+
+        let output_ibuffer = if let Some(output_buffer) = &output_buffer {
+            Some(Buffer::Create(output_buffer.len().try_into().unwrap())?.cast()?)
+        } else {
+            None
+        };
+
+        let result = self
+            .device
+            .SendIOControlAsync(control_code, input_ibuffer, &output_ibuffer)?
+            .await?;
+
+        if let Some(output_buffer) = output_buffer {
+            let byte_access = Buffer::CreateMemoryBufferOverIBuffer(output_ibuffer.unwrap())?
+                .CreateReference()?
+                .cast::<IMemoryBufferByteAccess>()?;
+
+            unsafe {
+                let mut data = std::ptr::null_mut();
+                let mut len = 0;
+                byte_access.GetBuffer(&mut data, &mut len)?;
+
+                let bytes = std::slice::from_raw_parts(data, len.try_into().unwrap());
+
+                output_buffer.copy_from_slice(bytes);
+            };
+        }
+
+        Ok(result)
     }
 }
