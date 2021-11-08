@@ -2,7 +2,10 @@ use std::error::Error;
 
 use clap::{arg_enum, crate_authors, crate_name, crate_version, value_t, App, Arg, SubCommand};
 
-use ups::{hid_device::HidDevice, ups::Ups, voltronic_hid_ups::VoltronicHidUps};
+use ups::{
+    hid_device::HidDevice, megatec_hid_ups::MegatecHidUps, ups::Ups,
+    voltronic_hid_ups::VoltronicHidUps,
+};
 
 arg_enum! {
     #[derive(Debug, PartialEq, Eq)]
@@ -69,15 +72,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let device = HidDevice::new(usage_page, usage_id, vendor_id, product_id).await?;
 
-    let ups = match model {
-        Model::Voltronic => VoltronicHidUps::new(device)?,
-        Model::Megatec => todo!(),
+    let ups: Box<dyn Ups> = match model {
+        Model::Voltronic => Box::new(VoltronicHidUps::new(device)?),
+        Model::Megatec => Box::new(MegatecHidUps::new(device)?),
     };
 
     match args.subcommand() {
         ("status", _) => {
             let status = ups.status().await?;
-            dbg!(status);
+            println!("{:#?}", status);
         }
         ("", None) => {
             eprintln!("A subcommand must be specified");

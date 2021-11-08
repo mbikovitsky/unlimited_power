@@ -6,12 +6,11 @@ use tokio::{sync::Mutex, time::timeout};
 
 use crate::{
     hid_device::HidDevice,
-    ups::{Ups, UpsStatus, UpsStatusFlags},
+    ups::{Ups, UpsStatus},
 };
 
 const REPORT_ID: u8 = 0;
 
-const HEADER: char = '(';
 const TERMINATOR: char = '\r';
 
 const SEND_TIMEOUT_MS: u64 = 1000;
@@ -128,34 +127,7 @@ impl Ups for VoltronicHidUps {
 
         let response = self.transact_command("QS").await?;
 
-        match response.chars().nth(0) {
-            Some(first_char) => {
-                if first_char != HEADER {
-                    return Err(anyhow!("Unexpected QS response header"));
-                }
-            }
-            None => return Err(anyhow!("QS response too short")),
-        }
-        assert!(HEADER.is_ascii());
-        let response = &response[1..];
-
-        let parts: Vec<_> = response.split_whitespace().collect();
-        if parts.len() != 8 {
-            return Err(anyhow!("Unexpected number of QS response parts"));
-        }
-
-        let status = UpsStatus {
-            input_voltage: parts[0].parse().unwrap_or(f32::NAN),
-            input_fault_voltage: parts[1].parse().unwrap_or(f32::NAN),
-            output_voltage: parts[2].parse().unwrap_or(f32::NAN),
-            output_load_level: parts[3].parse().unwrap_or(0),
-            output_frequency: parts[4].parse().unwrap_or(f32::NAN),
-            battery_voltage: parts[5].parse().unwrap_or(f32::NAN),
-            internal_temperature: parts[6].parse().unwrap_or(f32::NAN),
-            flags: UpsStatusFlags::from_bits(u8::from_str_radix(parts[7], 2).unwrap_or(0)).unwrap(),
-        };
-
-        Ok(status)
+        Ok(response.parse()?)
     }
 }
 

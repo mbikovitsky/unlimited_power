@@ -135,24 +135,25 @@ impl HidDevice {
         input_buffer: Option<&[u8]>,
         output_buffer: Option<&mut [u8]>,
     ) -> Result<u32> {
-        let control_code = ioctl_number_to_class(control_code)?;
-
-        let input_ibuffer = if let Some(input_buffer) = input_buffer {
-            Some(slice_to_ibuffer(input_buffer)?)
-        } else {
-            None
-        };
-
         let output_ibuffer = if let Some(output_buffer) = &output_buffer {
-            Some(Buffer::Create(output_buffer.len().try_into().unwrap())?.cast()?)
+            Some(Buffer::Create(output_buffer.len().try_into().unwrap())?)
         } else {
             None
         };
 
-        let result = self
-            .device
-            .SendIOControlAsync(control_code, input_ibuffer, &output_ibuffer)?
-            .await?;
+        let result = {
+            let future = self.device.SendIOControlAsync(
+                ioctl_number_to_class(control_code)?,
+                input_buffer
+                    .map(|input| slice_to_ibuffer(input))
+                    .transpose()?,
+                output_ibuffer
+                    .as_ref()
+                    .map(|buffer| buffer.cast())
+                    .transpose()?,
+            )?;
+            future.await?
+        };
 
         if let Some(output_buffer) = output_buffer {
             let byte_access = Buffer::CreateMemoryBufferOverIBuffer(output_ibuffer.unwrap())?
