@@ -1,13 +1,15 @@
 use std::time::Duration;
 
-use bitflags::bitflags;
 use tokio::{sync::Mutex, time::timeout};
 use windows::{
     runtime::{Error, Result},
     Win32::Foundation::{E_UNEXPECTED, OLE_E_CANTCONVERT, RPC_E_TIMEOUT},
 };
 
-use crate::hid_device::HidDevice;
+use crate::{
+    hid_device::HidDevice,
+    ups::{UpsStatus, UpsStatusFlags},
+};
 
 const REPORT_ID: u8 = 0;
 
@@ -170,56 +172,4 @@ pub enum UpsProtocol {
     T,
     V,
     Unknown,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct UpsStatus {
-    input_voltage: f32,
-    input_fault_voltage: f32,
-    output_voltage: f32,
-    output_load_level: u32,
-    output_frequency: f32,
-    battery_voltage: f32,
-    internal_temperature: f32,
-    flags: UpsStatusFlags,
-}
-
-impl UpsStatus {
-    pub fn flags(&self) -> UpsStatusFlags {
-        self.flags
-    }
-
-    pub fn work_mode(&self) -> UpsWorkMode {
-        if self.flags.contains(UpsStatusFlags::UPS_FAULT) {
-            UpsWorkMode::Fault
-        } else if self.flags.contains(UpsStatusFlags::UTILITY_FAIL) {
-            UpsWorkMode::Battery
-        } else if self.flags.contains(UpsStatusFlags::SELF_TEST_IN_PROGRESS) {
-            UpsWorkMode::BatteryTest
-        } else {
-            UpsWorkMode::Line
-        }
-    }
-}
-
-bitflags! {
-    #[derive(Default)]
-    pub struct UpsStatusFlags: u8 {
-        const BEEPER_ACTIVE         = 0b00000001;
-        const UPS_SHUTDOWN_ACTIVE   = 0b00000010;
-        const SELF_TEST_IN_PROGRESS = 0b00000100;
-        const UPS_LINE_INTERACTIVE  = 0b00001000;
-        const UPS_FAULT             = 0b00010000;
-        const BOOST_OR_BUCK_MODE    = 0b00100000;
-        const BATTERY_LOW           = 0b01000000;
-        const UTILITY_FAIL          = 0b10000000;
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UpsWorkMode {
-    Line,
-    Battery,
-    BatteryTest,
-    Fault,
 }

@@ -56,8 +56,11 @@ use self_impersonator::SelfImpersonator;
 use services::{ScManager, ScManagerAccessRights, ServiceAccessRights};
 use sessions::WTSServer;
 use token::Token;
-use ups::hid_device::HidDevice;
-use ups::voltronic_hid_ups::{VoltronicHidUps, UpsStatus, UpsStatusFlags, UpsWorkMode};
+use ups::{
+    hid_device::HidDevice,
+    ups::{UpsStatus, UpsStatusFlags, UpsWorkMode},
+    voltronic_hid_ups::VoltronicHidUps,
+};
 
 static SERVICE_HANDLE: AtomicIsize = AtomicIsize::new(0);
 static SHUTDOWN: Notify = Notify::const_new();
