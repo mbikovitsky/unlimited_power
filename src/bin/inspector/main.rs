@@ -3,7 +3,9 @@ use std::error::Error;
 use clap::{command, Parser, Subcommand, ValueEnum};
 
 use ups::{
-    hid_device::HidDevice, megatec_hid_ups::MegatecHidUps, ups::Ups,
+    hid_device::HidDevice,
+    megatec_hid_ups::MegatecHidUps,
+    ups::{Ups, UpsStatusFlags},
     voltronic_hid_ups::VoltronicHidUps,
 };
 
@@ -11,6 +13,27 @@ use ups::{
 enum Model {
     Voltronic,
     Megatec,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum OnOff {
+    On,
+    Off,
+}
+
+impl From<OnOff> for bool {
+    fn from(value: OnOff) -> Self {
+        match value {
+            OnOff::On => true,
+            OnOff::Off => false,
+        }
+    }
+}
+
+impl From<&OnOff> for bool {
+    fn from(value: &OnOff) -> Self {
+        (*value).into()
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -44,6 +67,12 @@ struct Cli {
 enum Commands {
     /// Displays the UPS status
     Status,
+
+    /// Beeper control
+    Beeper {
+        /// Beeper state to set
+        state: Option<OnOff>,
+    },
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -62,6 +91,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Commands::Status => {
             let status = ups.status().await?;
             println!("{:#?}", status);
+        }
+        Commands::Beeper { state } => {
+            if let Some(state) = state {
+                ups.beeper(state.into()).await?;
+            }
+
+            let status = ups.status().await?;
+            let beeper_on = status.flags.contains(UpsStatusFlags::BEEPER_ACTIVE);
+            println!("Beeper is {}", if beeper_on { "ON" } else { "OFF" })
         }
     }
 
