@@ -398,6 +398,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitflags",
+ "static_assertions",
  "tokio",
  "windows",
 ]

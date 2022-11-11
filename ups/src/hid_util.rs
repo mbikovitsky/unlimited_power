@@ -1,3 +1,6 @@
+use std::{cell::UnsafeCell, marker::PhantomData};
+
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use windows::{
     runtime::{Error, Result},
     Win32::{
@@ -15,7 +18,11 @@ use windows::{
 #[derive(Debug)]
 pub(crate) struct HidInfo {
     handle: HANDLE,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(HidInfo: Send);
+assert_not_impl_all!(HidInfo: Sync);
 
 impl HidInfo {
     pub fn new(device_id: &str) -> Result<Self> {
@@ -34,7 +41,10 @@ impl HidInfo {
         if let HANDLE(-1) = handle {
             return Err(Error::new(error, "CreateFileW"));
         }
-        Ok(Self { handle })
+        Ok(Self {
+            handle,
+            _send_not_sync: PhantomData,
+        })
     }
 
     pub fn preparsed_data(&self) -> Result<HidPreparsedData> {
@@ -45,7 +55,10 @@ impl HidInfo {
             if result.0 == 0 {
                 return Err(Error::new(error, "HidD_GetPreparsedData"));
             }
-            Ok(HidPreparsedData { data })
+            Ok(HidPreparsedData {
+                data,
+                _send_not_sync: PhantomData,
+            })
         }
     }
 }
@@ -58,13 +71,14 @@ impl Drop for HidInfo {
     }
 }
 
-unsafe impl Send for HidInfo {}
-impl !Sync for HidInfo {}
-
 #[derive(Debug)]
 pub(crate) struct HidPreparsedData {
     data: isize,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(HidPreparsedData: Send);
+assert_not_impl_all!(HidPreparsedData: Sync);
 
 impl HidPreparsedData {
     pub fn caps(&self) -> Result<HIDP_CAPS> {
@@ -83,6 +97,3 @@ impl Drop for HidPreparsedData {
         }
     }
 }
-
-unsafe impl Send for HidPreparsedData {}
-impl !Sync for HidPreparsedData {}

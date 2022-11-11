@@ -1,5 +1,6 @@
-use std::{convert::TryInto, mem::size_of, slice};
+use std::{cell::UnsafeCell, convert::TryInto, marker::PhantomData, mem::size_of, slice};
 
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use windows::{
     runtime::Result,
     Win32::{
@@ -15,7 +16,11 @@ use windows::{
 #[derive(Debug)]
 pub struct WTSServer {
     handle: HANDLE,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(WTSServer: Send);
+assert_not_impl_all!(WTSServer: Sync);
 
 impl WTSServer {
     const WTS_CURRENT_SERVER_HANDLE: HANDLE = HANDLE(0);
@@ -23,6 +28,7 @@ impl WTSServer {
     pub fn open_local() -> Self {
         Self {
             handle: Self::WTS_CURRENT_SERVER_HANDLE,
+            _send_not_sync: PhantomData,
         }
     }
 
@@ -78,9 +84,6 @@ impl Drop for WTSServer {
         }
     }
 }
-
-unsafe impl Send for WTSServer {}
-impl !Sync for WTSServer {}
 
 #[derive(Debug)]
 pub struct WTSSessionInfoList {

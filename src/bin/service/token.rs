@@ -1,3 +1,6 @@
+use std::{cell::UnsafeCell, marker::PhantomData};
+
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use windows::{
     runtime::{Error, Result, HRESULT},
     Win32::{
@@ -13,7 +16,11 @@ use windows::{
 #[derive(Debug)]
 pub struct Token {
     handle: HANDLE,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(Token: Send);
+assert_not_impl_all!(Token: Sync);
 
 impl Token {
     pub fn open_thread_token(
@@ -32,6 +39,7 @@ impl Token {
         }
         Ok(Self {
             handle: thread_token,
+            _send_not_sync: PhantomData,
         })
     }
 
@@ -77,6 +85,3 @@ impl Drop for Token {
         }
     }
 }
-
-unsafe impl Send for Token {}
-impl !Sync for Token {}

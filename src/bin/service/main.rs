@@ -1,5 +1,3 @@
-#![feature(negative_impls)]
-
 mod config;
 mod event;
 mod logger;

@@ -1,5 +1,6 @@
-use std::path::Path;
+use std::{cell::UnsafeCell, marker::PhantomData, path::Path};
 
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use widestring::U16CString;
 use windows::{
     runtime::{Error, Result},
@@ -18,7 +19,11 @@ use windows::{
 #[derive(Debug)]
 pub struct ScManager {
     handle: SC_HANDLE,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(ScManager: Send);
+assert_not_impl_all!(ScManager: Sync);
 
 impl ScManager {
     pub fn open_local(desired_access: ScManagerAccessRights) -> Result<Self> {
@@ -26,7 +31,10 @@ impl ScManager {
         if handle.0 == 0 {
             return Err(Error::from_win32());
         }
-        Ok(Self { handle })
+        Ok(Self {
+            handle,
+            _send_not_sync: PhantomData,
+        })
     }
 
     pub fn create_local_system_service(
@@ -58,7 +66,10 @@ impl ScManager {
         if handle.0 == 0 {
             return Err(Error::from_win32());
         }
-        Ok(Service { handle })
+        Ok(Service {
+            handle,
+            _send_not_sync: PhantomData,
+        })
     }
 
     pub fn open_service(
@@ -70,7 +81,10 @@ impl ScManager {
         if handle.0 == 0 {
             return Err(Error::from_win32());
         }
-        Ok(Service { handle })
+        Ok(Service {
+            handle,
+            _send_not_sync: PhantomData,
+        })
     }
 }
 
@@ -82,13 +96,14 @@ impl Drop for ScManager {
     }
 }
 
-unsafe impl Send for ScManager {}
-impl !Sync for ScManager {}
-
 #[derive(Debug)]
 pub struct Service {
     handle: SC_HANDLE,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(Service: Send);
+assert_not_impl_all!(Service: Sync);
 
 impl Service {
     pub fn delete(&self) -> Result<()> {
@@ -133,9 +148,6 @@ impl Drop for Service {
         }
     }
 }
-
-unsafe impl Send for Service {}
-impl !Sync for Service {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScManagerAccessRights(u32);
