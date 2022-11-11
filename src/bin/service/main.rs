@@ -328,6 +328,10 @@ async fn main_loop(
                 () = WAKEUP.signaled()? => {
                     info!("System woke up");
                 }
+                // If the shutdown/hibernation was cancelled by the user, we won't get
+                // the wakeup signal. If the power goes down, we don't care.
+                // If the power is restored, we want to continue the loop, and not
+                // wait indefinitely for a signal that won't ever come.
                 result = wait_for_power_recovery(rx.clone()) => {
                     result?;
                     info!("Power restored");
