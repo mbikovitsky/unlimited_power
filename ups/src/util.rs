@@ -1,5 +1,5 @@
 use windows::{
-    runtime::{Interface, Result},
+    core::{Interface, Result},
     Devices::Custom::{
         IIOControlCode, IOControlAccessMode, IOControlBufferingMethod, IOControlCode,
     },

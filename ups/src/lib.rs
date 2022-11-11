@@ -1,5 +1,3 @@
-#![feature(negative_impls)]
-
 mod hid_util;
 mod util;
 

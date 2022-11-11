@@ -1,6 +1,6 @@
 [package]
 name = "unlimited_power"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Michael Bikovitsky <biko@bikodbg.com>"]
 edition = "2018"
 
@@ -16,13 +16,13 @@ winreg = { version = "0.10" }
 lazy_static = "1.4.0"
 humantime = "2.1.0"
 static_assertions = "1.1.0"
-clap = "2.33.3"
+clap = { version = "4.0.22", features = ["derive", "cargo"] }
 anyhow = "1.0"
 num-traits = "0.2"
 num-derive = "0.3"
 
 [dependencies.windows]
-version = "0.25.0"
+version = "0.43.0"
 features = [
     "Win32_Foundation",
     "Win32_System_Services",
@@ -31,7 +31,11 @@ features = [
     "Win32_System_SystemServices",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_RemoteDesktop",
+    "Win32_System_WindowsProgramming",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Shutdown",
     "Win32_System_Power",
 ]
+
+[dev-dependencies]
+serial_test = "*"

@@ -6,7 +6,11 @@ use bitflags::bitflags;
 
 #[async_trait]
 pub trait Ups {
+    /// Get UPS status
     async fn status(&self) -> Result<UpsStatus>;
+
+    /// Turn the beeper on or off
+    async fn beeper(&self, on: bool) -> Result<()>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]

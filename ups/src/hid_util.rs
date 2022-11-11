@@ -1,5 +1,8 @@
+use std::{cell::UnsafeCell, marker::PhantomData};
+
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 use windows::{
-    runtime::{Error, Result},
+    core::Result,
     Win32::{
         Devices::HumanInterfaceDevice::{
             HidD_FreePreparsedData, HidD_GetPreparsedData, HidP_GetCaps, HIDP_CAPS,
@@ -15,37 +18,39 @@ use windows::{
 #[derive(Debug)]
 pub(crate) struct HidInfo {
     handle: HANDLE,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(HidInfo: Send);
+assert_not_impl_all!(HidInfo: Sync);
 
 impl HidInfo {
     pub fn new(device_id: &str) -> Result<Self> {
         let handle = unsafe {
             CreateFileW(
-                device_id,
+                &device_id.into(),
                 FILE_GENERIC_READ,
                 FILE_SHARE_READ | FILE_SHARE_WRITE,
-                std::ptr::null_mut(),
+                None,
                 OPEN_EXISTING,
                 FILE_FLAGS_AND_ATTRIBUTES(0),
                 HANDLE(0),
-            )
+            )?
         };
-        let error = Error::from_win32().code();
-        if let HANDLE(-1) = handle {
-            return Err(Error::new(error, "CreateFileW"));
-        }
-        Ok(Self { handle })
+        Ok(Self {
+            handle,
+            _send_not_sync: PhantomData,
+        })
     }
 
     pub fn preparsed_data(&self) -> Result<HidPreparsedData> {
         unsafe {
             let mut data = 0;
-            let result = HidD_GetPreparsedData(self.handle, &mut data);
-            let error = Error::from_win32().code();
-            if result.0 == 0 {
-                return Err(Error::new(error, "HidD_GetPreparsedData"));
-            }
-            Ok(HidPreparsedData { data })
+            HidD_GetPreparsedData(self.handle, &mut data).ok()?;
+            Ok(HidPreparsedData {
+                data,
+                _send_not_sync: PhantomData,
+            })
         }
     }
 }
@@ -58,13 +63,14 @@ impl Drop for HidInfo {
     }
 }
 
-unsafe impl Send for HidInfo {}
-impl !Sync for HidInfo {}
-
 #[derive(Debug)]
 pub(crate) struct HidPreparsedData {
     data: isize,
+    _send_not_sync: PhantomData<UnsafeCell<()>>,
 }
+
+assert_impl_all!(HidPreparsedData: Send);
+assert_not_impl_all!(HidPreparsedData: Sync);
 
 impl HidPreparsedData {
     pub fn caps(&self) -> Result<HIDP_CAPS> {
@@ -83,6 +89,3 @@ impl Drop for HidPreparsedData {
         }
     }
 }
-
-unsafe impl Send for HidPreparsedData {}
-impl !Sync for HidPreparsedData {}

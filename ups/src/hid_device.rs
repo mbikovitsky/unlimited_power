@@ -2,12 +2,12 @@ use std::convert::TryInto;
 
 use anyhow::{anyhow, Result};
 use windows::{
-    runtime::Interface,
+    core::Interface,
     Devices::{
         Custom::{CustomDevice, DeviceAccessMode, DeviceSharingMode},
         Enumeration::{DeviceInformation, DeviceInformationCollection},
     },
-    Storage::Streams::{Buffer, DataReader},
+    Storage::Streams::{Buffer, DataReader, IBuffer},
     Win32::System::WinRT::IMemoryBufferByteAccess,
 };
 
@@ -75,12 +75,12 @@ impl HidDevice {
             product_id
         );
 
-        Ok(DeviceInformation::FindAllAsyncAqsFilter(selector)?.await?)
+        Ok(DeviceInformation::FindAllAsyncAqsFilter(&selector.into())?.await?)
     }
 
     async fn open_device(device_id: &str) -> Result<CustomDevice> {
         let future = CustomDevice::FromIdAsync(
-            device_id,
+            &device_id.into(),
             DeviceAccessMode::ReadWrite,
             DeviceSharingMode::Exclusive,
         )?;
@@ -92,7 +92,7 @@ impl HidDevice {
 
         let future = {
             let report_buffer = slice_to_ibuffer(&report)?;
-            self.device.OutputStream()?.WriteAsync(report_buffer)?
+            self.device.OutputStream()?.WriteAsync(&report_buffer)?
         };
         let written = future.await?;
         assert_eq!(written, self.output_report_size.try_into().unwrap());
@@ -114,7 +114,7 @@ impl HidDevice {
     }
 
     pub async fn read_input_report(&self) -> Result<(u8, Vec<u8>)> {
-        let reader = DataReader::CreateDataReader(self.device.InputStream()?)?;
+        let reader = DataReader::CreateDataReader(&self.device.InputStream()?)?;
 
         let future = reader.LoadAsync(self.input_report_size.try_into().unwrap())?;
         future.await?;
@@ -143,20 +143,24 @@ impl HidDevice {
 
         let result = {
             let future = self.device.SendIOControlAsync(
-                ioctl_number_to_class(control_code)?,
+                &ioctl_number_to_class(control_code)?,
                 input_buffer
                     .map(|input| slice_to_ibuffer(input))
-                    .transpose()?,
+                    .transpose()?
+                    .as_ref(),
                 output_ibuffer
                     .as_ref()
-                    .map(|buffer| buffer.cast())
-                    .transpose()?,
+                    .map(|buffer| buffer.cast::<IBuffer>())
+                    .transpose()?
+                    .as_ref(),
             )?;
             future.await?
         };
 
         if let Some(output_buffer) = output_buffer {
-            let byte_access = Buffer::CreateMemoryBufferOverIBuffer(output_ibuffer.unwrap())?
+            let output_ibuffer = output_ibuffer.unwrap().cast::<IBuffer>()?;
+
+            let byte_access = Buffer::CreateMemoryBufferOverIBuffer(&output_ibuffer)?
                 .CreateReference()?
                 .cast::<IMemoryBufferByteAccess>()?;
 
