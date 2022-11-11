@@ -192,19 +192,24 @@ impl<'a> Drop for Signaled<'a> {
 mod tests {
     use std::sync::atomic::Ordering;
 
+    use serial_test::{parallel, serial};
+
     use super::*;
 
     #[test]
+    #[parallel]
     fn manual_event_can_be_created() {
         Event::new(true, false).unwrap();
     }
 
     #[test]
+    #[parallel]
     fn auto_event_can_be_created() {
         Event::new(false, false).unwrap();
     }
 
     #[tokio::test]
+    #[parallel]
     async fn manual_event_can_be_awaited() {
         let event = Event::new(true, false).unwrap();
         event.set().unwrap();
@@ -212,6 +217,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn auto_event_can_be_awaited() {
         let event = Event::new(false, false).unwrap();
         event.set().unwrap();
@@ -219,6 +225,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn manual_event_can_be_awaited_twice() {
         let event = Event::new(true, false).unwrap();
         event.set().unwrap();
@@ -227,18 +234,21 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn manual_event_future_can_be_dropped_without_awaiting() {
         let event = Event::new(true, false).unwrap();
         let _future = event.signaled().unwrap();
     }
 
     #[test]
+    #[parallel]
     fn auto_event_future_can_be_dropped_without_awaiting() {
         let event = Event::new(false, false).unwrap();
         let _future = event.signaled().unwrap();
     }
 
     #[test]
+    #[serial]
     fn manual_event_future_doesnt_leak() {
         SHARED_STATE_DROP_COUNT.store(0, Ordering::SeqCst);
 
@@ -250,6 +260,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn auto_event_future_doesnt_leak() {
         SHARED_STATE_DROP_COUNT.store(0, Ordering::SeqCst);
 
