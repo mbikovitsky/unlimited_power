@@ -2,7 +2,7 @@ use std::{cell::UnsafeCell, marker::PhantomData};
 
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 use windows::{
-    runtime::{Error, Result, HRESULT},
+    core::{Error, Result, HRESULT},
     Win32::{
         Foundation::{CloseHandle, GetLastError, ERROR_NOT_ALL_ASSIGNED, HANDLE},
         Security::{
@@ -53,24 +53,18 @@ impl Token {
         };
 
         unsafe {
-            LookupPrivilegeValueW(None, name, &mut privileges.Privileges[0].Luid).ok()?;
+            LookupPrivilegeValueW(None, &name.into(), &mut privileges.Privileges[0].Luid).ok()?;
         }
 
+        let privileges = privileges;
+
         unsafe {
-            AdjustTokenPrivileges(
-                self.handle,
-                false,
-                &mut privileges,
-                0,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            )
-            .ok()?;
+            AdjustTokenPrivileges(self.handle, false, Some(&privileges), 0, None, None).ok()?;
         }
         if unsafe { GetLastError() } == ERROR_NOT_ALL_ASSIGNED {
             return Err(Error::new(
                 HRESULT::from(ERROR_NOT_ALL_ASSIGNED),
-                "AdjustTokenPrivileges",
+                "AdjustTokenPrivileges".into(),
             ));
         }
 

@@ -12,12 +12,15 @@ use std::{
 use log::error;
 use static_assertions::assert_impl_all;
 use windows::{
-    runtime::{Error, Result},
+    core::{Error, Result},
     Win32::{
-        Foundation::{CloseHandle, BOOLEAN, HANDLE},
-        System::Threading::{
-            CreateEventW, RegisterWaitForSingleObject, ResetEvent, SetEvent, UnregisterWaitEx,
-            WT_EXECUTEONLYONCE,
+        Foundation::{CloseHandle, BOOLEAN, HANDLE, INVALID_HANDLE_VALUE},
+        System::{
+            Threading::{
+                CreateEventW, RegisterWaitForSingleObject, ResetEvent, SetEvent, UnregisterWaitEx,
+                WT_EXECUTEONLYONCE,
+            },
+            WindowsProgramming::INFINITE,
         },
     },
 };
@@ -28,10 +31,7 @@ pub struct Event {
 
 impl Event {
     pub fn new(manual_reset: bool, signaled: bool) -> Result<Self> {
-        let handle = unsafe { CreateEventW(std::ptr::null(), manual_reset, signaled, None) };
-        if handle == HANDLE(0) {
-            return Err(Error::from_win32());
-        }
+        let handle = unsafe { CreateEventW(None, manual_reset, signaled, None)? };
         Ok(Self { handle })
     }
 
@@ -108,18 +108,16 @@ impl<'a> Signaled<'a> {
         event: &Event,
         shared_state: Box<Mutex<SharedState>>,
     ) -> Result<(HANDLE, *const Mutex<SharedState>)> {
-        const INFINITE: u32 = u32::MAX;
-
         assert_impl_all!(Mutex<SharedState>: Sync);
 
         unsafe {
-            let shared_state_raw_ptr = Box::into_raw(shared_state) as *const Mutex<SharedState>;
+            let shared_state_raw_ptr = Box::into_raw(shared_state).cast_const();
             let mut wait_handle = Default::default();
             let success = RegisterWaitForSingleObject(
                 &mut wait_handle,
                 event.raw_handle(),
                 Some(Self::wait_callback),
-                shared_state_raw_ptr as _,
+                Some(shared_state_raw_ptr.cast()),
                 INFINITE,
                 WT_EXECUTEONLYONCE,
             );
@@ -133,7 +131,7 @@ impl<'a> Signaled<'a> {
     }
 
     unsafe fn drop_shared_state(shared_state: *const Mutex<SharedState>) {
-        drop(Box::from_raw(shared_state as *mut Mutex<SharedState>));
+        drop(Box::from_raw(shared_state.cast_mut()));
     }
 
     extern "system" fn wait_callback(lp_parameter: *mut c_void, timer_or_wait_fired: BOOLEAN) {
@@ -142,7 +140,7 @@ impl<'a> Signaled<'a> {
             let shared_state = unsafe { shared_state.as_ref().unwrap() };
             let mut shared_state = shared_state.lock().unwrap();
 
-            let timed_out = timer_or_wait_fired.0 != 0;
+            let timed_out = timer_or_wait_fired.as_bool();
             assert!(!timed_out); // Can't time out as we specify INFINITE
 
             shared_state.signaled = true;
@@ -181,7 +179,6 @@ impl<'a> Drop for Signaled<'a> {
             unsafe {
                 // Specifying INVALID_HANDLE_VALUE so that the call waits for all callbacks
                 // to return.
-                const INVALID_HANDLE_VALUE: HANDLE = HANDLE(-1);
                 assert_ne!(this.wait_handle, HANDLE(0));
                 UnregisterWaitEx(this.wait_handle, INVALID_HANDLE_VALUE)
                     .expect("UnregisterWaitEx failed");

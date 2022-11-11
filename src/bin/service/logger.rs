@@ -19,7 +19,7 @@ impl log::Log for Logger {
             record.args()
         );
         unsafe {
-            OutputDebugStringW(string);
+            OutputDebugStringW(&string.into());
         }
     }
 

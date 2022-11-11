@@ -3,9 +3,8 @@ use std::{cell::UnsafeCell, marker::PhantomData, path::Path};
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 use widestring::U16CString;
 use windows::{
-    runtime::{Error, Result},
+    core::{Result, PWSTR},
     Win32::{
-        Foundation::PWSTR,
         Security::SC_HANDLE,
         System::Services::{
             ChangeServiceConfig2W, CloseServiceHandle, CreateServiceW, DeleteService,
@@ -27,10 +26,7 @@ assert_not_impl_all!(ScManager: Sync);
 
 impl ScManager {
     pub fn open_local(desired_access: ScManagerAccessRights) -> Result<Self> {
-        let handle = unsafe { OpenSCManagerW(None, None, desired_access.0) };
-        if handle.0 == 0 {
-            return Err(Error::from_win32());
-        }
+        let handle = unsafe { OpenSCManagerW(None, None, desired_access.0)? };
         Ok(Self {
             handle,
             _send_not_sync: PhantomData,
@@ -49,23 +45,20 @@ impl ScManager {
         let handle = unsafe {
             CreateServiceW(
                 self.handle,
-                service_name.as_ref(),
-                display_name.as_ref(),
+                &service_name.as_ref().into(),
+                &display_name.as_ref().into(),
                 ServiceAccessRights::SERVICE_ALL_ACCESS.0,
                 service_type,
                 start_type,
                 error_control,
-                binary_path.as_ref().to_str().unwrap(),
-                None,
-                std::ptr::null_mut(),
+                &binary_path.as_ref().to_str().unwrap().into(),
                 None,
                 None,
                 None,
-            )
+                None,
+                None,
+            )?
         };
-        if handle.0 == 0 {
-            return Err(Error::from_win32());
-        }
         Ok(Service {
             handle,
             _send_not_sync: PhantomData,
@@ -77,10 +70,8 @@ impl ScManager {
         service_name: impl AsRef<str>,
         desired_access: ServiceAccessRights,
     ) -> Result<Service> {
-        let handle = unsafe { OpenServiceW(self.handle, service_name.as_ref(), desired_access.0) };
-        if handle.0 == 0 {
-            return Err(Error::from_win32());
-        }
+        let handle =
+            unsafe { OpenServiceW(self.handle, &service_name.as_ref().into(), desired_access.0)? };
         Ok(Service {
             handle,
             _send_not_sync: PhantomData,
@@ -124,7 +115,7 @@ impl Service {
             .collect();
 
         let mut info = SERVICE_REQUIRED_PRIVILEGES_INFOW {
-            pmszRequiredPrivileges: PWSTR(multi_string.as_mut_ptr()),
+            pmszRequiredPrivileges: PWSTR::from_raw(multi_string.as_mut_ptr()),
         };
         let info_ptr: *mut _ = &mut info;
 
@@ -132,7 +123,7 @@ impl Service {
             ChangeServiceConfig2W(
                 self.handle,
                 SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO,
-                info_ptr as _,
+                Some(info_ptr.cast()),
             )
             .ok()?;
         }

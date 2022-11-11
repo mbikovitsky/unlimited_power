@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use static_assertions::assert_not_impl_all;
 use windows::{
-    runtime::Result,
+    core::Result,
     Win32::Security::{ImpersonateSelf, RevertToSelf, SECURITY_IMPERSONATION_LEVEL},
 };
 

@@ -24,27 +24,30 @@ use tokio::{
     time::sleep,
 };
 use utf16_lit::utf16_null;
-use windows::Win32::{
-    Foundation::{
-        BOOL, BOOLEAN, ERROR_ARENA_TRASHED, ERROR_BADKEY, ERROR_CALL_NOT_IMPLEMENTED,
-        ERROR_SUCCESS, PWSTR,
-    },
-    Security::{SecurityImpersonation, TOKEN_ADJUST_PRIVILEGES},
-    System::{
-        Power::SetSuspendState,
-        RemoteDesktop::WTSActive,
-        Services::{
-            RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW,
-            SERVICE_AUTO_START, SERVICE_CONTROL_INTERROGATE, SERVICE_CONTROL_POWEREVENT,
-            SERVICE_CONTROL_STOP, SERVICE_ERROR_NORMAL, SERVICE_RUNNING, SERVICE_START_PENDING,
-            SERVICE_STATUS, SERVICE_STATUS_CURRENT_STATE, SERVICE_STATUS_HANDLE, SERVICE_STOPPED,
-            SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
+use windows::{
+    core::PWSTR,
+    Win32::{
+        Foundation::{
+            ERROR_ARENA_TRASHED, ERROR_BADKEY, ERROR_CALL_NOT_IMPLEMENTED, ERROR_SUCCESS,
         },
-        Shutdown::{
-            InitiateSystemShutdownExW, SHTDN_REASON_MAJOR_POWER, SHTDN_REASON_MINOR_ENVIRONMENT,
+        Security::{SecurityImpersonation, TOKEN_ADJUST_PRIVILEGES},
+        System::{
+            Power::SetSuspendState,
+            RemoteDesktop::WTSActive,
+            Services::{
+                RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW,
+                SERVICE_AUTO_START, SERVICE_CONTROL_INTERROGATE, SERVICE_CONTROL_POWEREVENT,
+                SERVICE_CONTROL_STOP, SERVICE_ERROR_NORMAL, SERVICE_RUNNING, SERVICE_START_PENDING,
+                SERVICE_STATUS, SERVICE_STATUS_CURRENT_STATE, SERVICE_STATUS_HANDLE,
+                SERVICE_STOPPED, SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW,
+                SERVICE_WIN32_OWN_PROCESS,
+            },
+            Shutdown::{
+                InitiateSystemShutdownExW, SHTDN_REASON_MAJOR_POWER, SHTDN_REASON_MINOR_ENVIRONMENT,
+            },
         },
+        UI::WindowsAndMessaging::{MB_ICONWARNING, MB_OK, PBT_APMRESUMEAUTOMATIC},
     },
-    UI::WindowsAndMessaging::{MB_ICONWARNING, MB_OK, PBT_APMRESUMEAUTOMATIC},
 };
 
 use config::{HardCodedConfig, RuntimeConfig};
@@ -86,7 +89,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut name = utf16_null!(HardCodedConfig::SERVICE_NAME);
         let table = [
             SERVICE_TABLE_ENTRYW {
-                lpServiceName: PWSTR(name.as_mut_ptr()),
+                lpServiceName: PWSTR::from_raw(name.as_mut_ptr()),
                 lpServiceProc: Some(service_main),
             },
             SERVICE_TABLE_ENTRYW::default(),
@@ -126,7 +129,7 @@ fn install_service() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn uninstall_service() -> windows::runtime::Result<()> {
+fn uninstall_service() -> windows::core::Result<()> {
     let sc_manager = ScManager::open_local(ScManagerAccessRights::SC_MANAGER_CONNECT)?;
 
     let service =
@@ -142,16 +145,19 @@ extern "system" fn service_main(_dw_num_services_args: u32, _lp_service_arg_vect
         debug!("Registering service control handler...");
         unsafe {
             let handle = RegisterServiceCtrlHandlerExW(
-                HardCodedConfig::SERVICE_NAME,
+                &HardCodedConfig::SERVICE_NAME.into(),
                 Some(control_handler),
-                std::ptr::null_mut(),
+                None,
             );
-            if handle.0 == 0 {
-                let error = windows::runtime::Error::from_win32();
-                error!("RegisterServiceCtrlHandlerExW failed with {:?}", error);
-                return;
+            match handle {
+                Ok(handle) => {
+                    SERVICE_HANDLE.store(handle.0, Ordering::SeqCst);
+                }
+                Err(error) => {
+                    error!("RegisterServiceCtrlHandlerExW failed with {:?}", error);
+                    return;
+                }
             }
-            SERVICE_HANDLE.store(handle.0, Ordering::SeqCst);
         }
 
         report_service_status(
@@ -378,7 +384,7 @@ where
     }
 }
 
-fn initiate_shutdown(hibernate: bool) -> windows::runtime::Result<()> {
+fn initiate_shutdown(hibernate: bool) -> windows::core::Result<()> {
     let _impersonator = SelfImpersonator::impersonate(SecurityImpersonation)?;
 
     let thread_token = Token::open_thread_token(TOKEN_ADJUST_PRIVILEGES, true)?;
@@ -388,9 +394,9 @@ fn initiate_shutdown(hibernate: bool) -> windows::runtime::Result<()> {
 
     if hibernate {
         info!("Hibernating...");
-        let result = unsafe { SetSuspendState(BOOLEAN(1), BOOLEAN(0), BOOLEAN(1)) };
-        let result = BOOL::from(result.0 != 0);
-        result.ok()?;
+        unsafe {
+            SetSuspendState(true, false, true).ok()?;
+        }
     } else {
         info!("Shutting down...");
         unsafe {

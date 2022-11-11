@@ -2,7 +2,7 @@ use std::{cell::UnsafeCell, convert::TryInto, marker::PhantomData, mem::size_of,
 
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 use windows::{
-    runtime::Result,
+    core::Result,
     Win32::{
         Foundation::HANDLE,
         System::RemoteDesktop::{
@@ -57,9 +57,9 @@ impl WTSServer {
             WTSSendMessageW(
                 self.handle,
                 session_id,
-                title.as_ref(),
+                &title.as_ref().into(),
                 title_length.try_into().unwrap(),
-                message.as_ref(),
+                &message.as_ref().into(),
                 message_length.try_into().unwrap(),
                 style,
                 0,
