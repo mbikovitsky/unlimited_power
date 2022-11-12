@@ -175,7 +175,7 @@ impl<'a> Drop for Signaled<'a> {
     fn drop(&mut self) {
         // See: https://doc.rust-lang.org/std/pin/index.html#drop-implementation
         inner_drop(Pin::new(self));
-        fn inner_drop<'a>(this: Pin<&mut Signaled<'a>>) {
+        fn inner_drop(this: Pin<&mut Signaled>) {
             unsafe {
                 // Specifying INVALID_HANDLE_VALUE so that the call waits for all callbacks
                 // to return.

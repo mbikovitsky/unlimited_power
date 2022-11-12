@@ -112,7 +112,7 @@ fn install_service() -> Result<(), Box<dyn Error>> {
         env::current_exe().unwrap(),
     )?;
 
-    let set_privilege_result = service.set_required_privileges(&["SeShutdownPrivilege"]);
+    let set_privilege_result = service.set_required_privileges(["SeShutdownPrivilege"]);
     if set_privilege_result.is_err() {
         service.delete().unwrap();
         set_privilege_result?;
@@ -491,12 +491,14 @@ fn report_service_status(
         _ => CHECKPOINT.fetch_add(1, Ordering::SeqCst),
     };
 
+    let status = status;
+
     trace!("{:?}", status);
 
     unsafe {
         SetServiceStatus(
             SERVICE_STATUS_HANDLE(SERVICE_HANDLE.load(Ordering::SeqCst)),
-            &mut status,
+            &status,
         );
     }
 }

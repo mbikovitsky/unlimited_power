@@ -92,7 +92,7 @@ pub struct WTSSessionInfoList {
 }
 
 impl WTSSessionInfoList {
-    pub fn iter<'a>(&'a self) -> WTSSessionInfoIterator<'a> {
+    pub fn iter(&self) -> WTSSessionInfoIterator {
         WTSSessionInfoIterator {
             sessions: unsafe {
                 slice::from_raw_parts(self.sessions, self.count.try_into().unwrap())

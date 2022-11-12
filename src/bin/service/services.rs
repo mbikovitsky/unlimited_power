@@ -110,8 +110,7 @@ impl Service {
             .into_iter()
             .map(|privilege| U16CString::from_str(privilege).unwrap())
             .chain(std::iter::once(U16CString::from_str("").unwrap()))
-            .map(|string| string.into_vec_with_nul())
-            .flatten()
+            .flat_map(|string| string.into_vec_with_nul())
             .collect();
 
         let mut info = SERVICE_REQUIRED_PRIVILEGES_INFOW {
