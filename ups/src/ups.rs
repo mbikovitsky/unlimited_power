@@ -9,8 +9,8 @@ pub trait Ups {
     /// Get UPS status
     async fn status(&self) -> Result<UpsStatus>;
 
-    /// Turn the beeper on or off
-    async fn beeper(&self, on: bool) -> Result<()>;
+    /// Toggle the beeper
+    async fn beeper_toggle(&self) -> Result<()>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]

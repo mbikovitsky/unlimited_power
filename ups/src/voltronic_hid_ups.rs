@@ -6,7 +6,7 @@ use tokio::{sync::Mutex, time::timeout};
 
 use crate::{
     hid_device::HidDevice,
-    ups::{Ups, UpsStatus, UpsStatusFlags},
+    ups::{Ups, UpsStatus},
 };
 
 const REPORT_ID: u8 = 0;
@@ -130,19 +130,13 @@ impl Ups for VoltronicHidUps {
         Ok(response.parse()?)
     }
 
-    async fn beeper(&self, on: bool) -> Result<()> {
+    async fn beeper_toggle(&self) -> Result<()> {
         match self.protocol().await? {
             UpsProtocol::V => {}
             _ => todo!("Protocol not implemented"),
         };
-        
-        let status = self.status().await?;
 
-        let should_toggle = on ^ status.flags.contains(UpsStatusFlags::BEEPER_ACTIVE);
-
-        if should_toggle {
-            self.transact_command("Q").await?;
-        }
+        self.transact_command("Q").await?;
 
         Ok(())
     }

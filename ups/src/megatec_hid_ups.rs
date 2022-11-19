@@ -3,7 +3,7 @@ use async_trait::async_trait;
 
 use crate::{
     hid_device::HidDevice,
-    ups::{Ups, UpsStatus, UpsStatusFlags},
+    ups::{Ups, UpsStatus},
 };
 
 #[derive(Debug)]
@@ -25,15 +25,8 @@ impl Ups for MegatecHidUps {
         Ok(status_string.parse()?)
     }
 
-    async fn beeper(&self, on: bool) -> Result<()> {
-        let status = self.status().await?;
-
-        let should_toggle = on ^ status.flags.contains(UpsStatusFlags::BEEPER_ACTIVE);
-
-        if should_toggle {
-            self.device.get_indexed_string(7).await?;
-        }
-
+    async fn beeper_toggle(&self) -> Result<()> {
+        self.device.get_indexed_string(7).await?;
         Ok(())
     }
 }

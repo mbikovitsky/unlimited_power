@@ -28,8 +28,8 @@ impl RuntimeConfig {
     pub fn read() -> anyhow::Result<Self> {
         let key = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(Self::registry_path())?;
 
-        let model: Model =
-            FromPrimitive::from_u32(key.get_value("model")?).ok_or(anyhow!("Invalid model"))?;
+        let model: Model = FromPrimitive::from_u32(key.get_value("model")?)
+            .ok_or_else(|| anyhow!("Invalid model"))?;
         let hibernate = key.get_value("hibernate").map(|value: u32| value != 0)?;
         let poll_interval_ms: u32 = key.get_value("poll_interval_ms")?;
         let poll_failure_timeout_ms: u32 = key.get_value("poll_failure_timeout_ms")?;

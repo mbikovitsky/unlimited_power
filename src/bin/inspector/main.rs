@@ -94,14 +94,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         Commands::Beeper { state } => {
             if let Some(state) = state {
-                ups.beeper(state.into()).await?;
+                let on: bool = state.into();
+                let should_toggle = on ^ beeper_on(ups.as_ref()).await?;
+
+                if should_toggle {
+                    ups.beeper_toggle().await?;
+                }
             }
 
-            let status = ups.status().await?;
-            let beeper_on = status.flags.contains(UpsStatusFlags::BEEPER_ACTIVE);
-            println!("Beeper is {}", if beeper_on { "ON" } else { "OFF" })
+            println!(
+                "Beeper is {}",
+                if beeper_on(ups.as_ref()).await? {
+                    "ON"
+                } else {
+                    "OFF"
+                }
+            )
         }
     }
 
     Ok(())
+}
+
+async fn beeper_on(ups: &dyn Ups) -> Result<bool, Box<dyn Error>> {
+    Ok(ups
+        .status()
+        .await?
+        .flags
+        .contains(UpsStatusFlags::BEEPER_ACTIVE))
 }
