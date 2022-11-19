@@ -1,6 +1,6 @@
 [package]
 name = "unlimited_power"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Michael Bikovitsky <biko@bikodbg.com>"]
 edition = "2018"
 
